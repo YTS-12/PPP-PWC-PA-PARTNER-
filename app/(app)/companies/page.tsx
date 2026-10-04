@@ -196,7 +196,7 @@ export default function CompaniesPage() {
                       <Link href={`/companies/${c.c}`} className="company">
                         {c.n}
                       </Link>{' '}
-                      {c.ag === 'SAMIL' ? <span className="tag red">삼일 감사 고객</span> : c.ag ? <span className="tag gray">타 법인 감사</span> : null}
+                      {c.ag === 'SAMIL' ? <span className="tag red">삼일 감사 고객</span> : c.ag ? <span className="tag gray">타 법인 감사 고객</span> : null}
                       <span className="ticker">
                         {c.s} · {c.m === 'KOSPI' ? '코스피' : '코스닥'} · {c.ig} · 자산 {won(c.a)}
                       </span>

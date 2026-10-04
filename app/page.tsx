@@ -3,10 +3,21 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
 
+const NEXT_ALLOWED = ['/dashboard', '/companies', '/me'];
+
+/** ?next=는 같은 사이트의 앱 화면만 허용한다. 역슬래시·제어문자는 브라우저가 외부 주소로 읽을 수 있어 거부한다 */
 function nextPath(): string {
   if (typeof window === 'undefined') return '/dashboard';
   const n = new URLSearchParams(window.location.search).get('next');
-  return n && n.startsWith('/') && !n.startsWith('//') ? n : '/dashboard';
+  if (!n || !n.startsWith('/') || /[\\\u0000-\u001f\u007f]/.test(n)) return '/dashboard';
+  try {
+    const u = new URL(n, window.location.origin);
+    if (u.origin !== window.location.origin) return '/dashboard';
+    if (!NEXT_ALLOWED.some((p) => u.pathname === p || u.pathname.startsWith(`${p}/`))) return '/dashboard';
+    return u.pathname + u.search;
+  } catch {
+    return '/dashboard';
+  }
 }
 
 export default function LoginPage() {

@@ -1,18 +1,17 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
 import { SIZE_LABEL, STATUSES, SVC } from '@/lib/config';
-import ModeBanner from '@/components/ModeBanner';
+import ModeBanner, { useLeaveToLogin } from '@/components/ModeBanner';
 import type { Profile, Status } from '@/lib/types';
 
 type Tab = 'short' | 'settings';
 
 export default function MePage() {
   const app = useApp();
-  const router = useRouter();
+  const leave = useLeaveToLogin();
   const { data } = useSummary();
   const [tab, setTab] = useState<Tab>('short');
   const [statusTab, setStatusTab] = useState<'전체' | Status>('전체');
@@ -208,13 +207,7 @@ export default function MePage() {
               <button className="danger" onClick={() => setConfirm(true)}>
                 내 저장 데이터 모두 지우기
               </button>
-              <button
-                className="secondary"
-                onClick={async () => {
-                  await app.logout();
-                  router.replace('/');
-                }}
-              >
+              <button className="secondary" onClick={leave}>
                 {isUser ? '로그아웃' : '로그인하러 가기'}
               </button>
             </div>

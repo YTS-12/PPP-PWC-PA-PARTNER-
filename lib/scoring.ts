@@ -1,5 +1,5 @@
 import { SERVICES, SIG, signalAvailable } from './config';
-import type { CompanySummary, ExtraKey, Filters, Hit, ServiceId } from './types';
+import type { CompanySummary, DetailHit, ExtraKey, Filters, Hit, ServiceId } from './types';
 
 export interface Scored extends CompanySummary {
   hits: Hit[];
@@ -26,6 +26,24 @@ export function activeSignals(f: Filters, extra?: Record<ExtraKey, boolean>): Se
   return new Set(
     f.signals.filter((id) => SIG[id] && f.services.includes(SIG[id].service) && signalAvailable(id, extra)),
   );
+}
+
+export interface DetailScore {
+  active: Set<string>; // 현재 조건에서 켜진 신호 ID
+  hits: DetailHit[]; // 그중 이 회사에 해당하는 근거
+  score: number;
+  total: number; // 조건과 상관없이 해당하는 근거 키 개수
+  priority: Scored['priority'];
+  services: ServiceId[];
+}
+
+/** 상세 화면 점수. 목록(applyFilters)과 같은 조건·같은 근거 키 기준으로 센다 */
+export function scoreDetailHits(hits: DetailHit[], f: Filters, extra?: Record<ExtraKey, boolean>): DetailScore {
+  const active = activeSignals(f, extra);
+  const inScope = hits.filter((h) => active.has(h.id));
+  const score = new Set(inScope.map((h) => h.k)).size;
+  const services = SERVICES.map((s) => s.id).filter((sid) => inScope.some((h) => SIG[h.id].service === sid));
+  return { active, hits: inScope, score, total: new Set(hits.map((h) => h.k)).size, priority: priorityOf(score), services };
 }
 
 export function applyFilters(

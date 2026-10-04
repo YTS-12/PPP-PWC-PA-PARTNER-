@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
 import { applyFilters } from '@/lib/scoring';
-import { CONFIG, SERVICES } from '@/lib/config';
+import { CONFIG, SERVICES, SIGNALS, signalAvailable } from '@/lib/config';
 import ModeBanner from '@/components/ModeBanner';
 import type { ExtraKey } from '@/lib/types';
 
@@ -14,8 +14,9 @@ export default function DashboardPage() {
   const app = useApp();
   const { data, error } = useSummary();
 
+  // 추천 목록에서 남긴 검색어는 대시보드 집계에 쓰지 않는다 (검색 중에는 0점 회사도 목록에 남기 때문)
   const scored = useMemo(
-    () => (data ? applyFilters(data.companies, app.filters, data.meta.extra) : []),
+    () => (data ? applyFilters(data.companies, { ...app.filters, query: '' }, data.meta.extra) : []),
     [data, app.filters],
   );
 
@@ -28,6 +29,15 @@ export default function DashboardPage() {
   const bars = SERVICES.map((s) => ({ s, n: scored.filter((c) => c.services.includes(s.id)).length }));
   const max = Math.max(1, ...bars.map((b) => b.n));
   const extras = Object.entries(CONFIG.extras) as [ExtraKey, { label: string; command: string }][];
+  const pendingSignals = SIGNALS.filter((s) => !signalAvailable(s.id, meta.extra)).map((s) => s.label);
+  // 최근 3개월 집계에 들어가는 공시 분류. 주요사항보고서 수집 전에는 기존 수집본 분류(합병·주식양수·영업양수·주식교환)만 센다
+  const recentKinds = [
+    meta.extra.major ? CAT_LABEL.MNA : '합병·양수 등(기존 수집본)',
+    meta.extra.major ? CAT_LABEL.DISTRESS : '',
+    meta.extra.krx ? CAT_LABEL.FRAUD : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const isUser = app.mode === 'user';
 
   return (
@@ -66,7 +76,7 @@ export default function DashboardPage() {
         <div className="card">
           <div className="kpi-label">최근 3개월 신호 공시</div>
           <div className="kpi-value">{meta.recent3m}</div>
-          <div className="kpi-note">합병·분할·회생·횡령 등</div>
+          <div className="kpi-note">{recentKinds}</div>
         </div>
       </div>
 
@@ -100,7 +110,7 @@ export default function DashboardPage() {
               <div className={`dot ${r.cat !== 'MNA' ? 'warn' : ''}`} />
               <div>
                 <strong>
-                  <Link href={`/companies/${r.c}`}>{r.n}</Link> · {CAT_LABEL[r.cat]}
+                  <Link href={`/companies/${r.c}`}>{r.n}</Link> · {r.cat === 'MNA' && !meta.extra.major ? '합병·양수' : CAT_LABEL[r.cat]}
                 </strong>
                 <p>
                   {r.t} · {r.d}
@@ -125,7 +135,9 @@ export default function DashboardPage() {
             </span>
           ))}
         </div>
-        <p className="hint">추가 수집 전인 신호(제출기한 연장신고·횡령·배임·영업외손익·부도·회생·자본잠식)는 추천 목록에서 비활성으로 보여요.</p>
+        {pendingSignals.length > 0 && (
+          <p className="hint">추가 수집 전인 신호({pendingSignals.join(', ')})는 추천 목록에서 비활성으로 보여요.</p>
+        )}
       </div>
 
       <div className="notice" style={{ marginTop: 16 }}>

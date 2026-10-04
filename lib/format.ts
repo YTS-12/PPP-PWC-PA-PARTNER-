@@ -34,4 +34,9 @@ export function siteUrl(u: string): string {
   return /^https?:\/\//i.test(s) ? s : `https://${s}`;
 }
 
-export const today = () => new Date().toISOString().slice(0, 10);
+/** 한국 날짜(YYYY-MM-DD). toISOString()은 UTC라 오전 9시 전에는 하루 전 날짜가 된다 */
+export function kstDate(d: Date | string = new Date()): string {
+  const t = typeof d === 'string' ? Date.parse(d) : d.getTime();
+  if (!Number.isFinite(t)) return '';
+  return new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
+}

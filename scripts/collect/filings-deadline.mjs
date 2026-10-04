@@ -1,7 +1,7 @@
 // 추가 수집 5: 사업보고서 제출기한 연장신고 (2024·2025·2026년 3/20~4/10)
-// 사용: npm run collect:deadline                 (공시유형 전체를 훑음)
-//       npm run collect:deadline -- --type A     (공시유형을 확인한 뒤 좁혀서 빠르게)
+// 사용: npm run collect:deadline                 (공시유형 전체를 훑음 · 권장)
 //       npm run collect:deadline -- --probe      ('연장'이 들어간 제목을 모두 보여 줌: 실제 제목 확인용)
+//       --type 은 공시유형을 이미 알 때만 쓴다. list.json 응답에는 공시유형 필드가 없어 결과로 유형을 확인할 수 없다.
 import path from 'node:path';
 import { arg, hasFlag, loadUniverse, writeJsonl, writeExtraMeta, EXTRA_DIR, log } from '../lib/common.mjs';
 import { createDart, reportStats, DartFatal } from '../lib/dart.mjs';

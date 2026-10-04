@@ -1,5 +1,5 @@
 // 기존 수집본(DATA_DIR) + 추가 수집분(data/extra) → public/data (summary.json, detail/00~99.json)
-// 함께 data/universe.json(추가 수집 대상 목록)도 만든다. 수집 담당은 이 파일로 수집한다.
+// 함께 data/universe.json(추가 수집 대상 목록)도 만든다. 추가 수집 스크립트는 이 파일로 대상을 정한다.
 // 사용: npm run data:build
 import fs from 'node:fs';
 import path from 'node:path';

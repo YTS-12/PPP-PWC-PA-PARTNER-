@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { getSupabase, supabaseConfigured } from './supabase';
 import { defaultFilters, normalizeFilters } from './config';
+import { kstDate } from './format';
 import type { Filters, Profile, ShortItem, Status } from './types';
 
 type Mode = 'guest' | 'user' | null;
@@ -58,8 +59,11 @@ function friendly(err: { message?: string; code?: string; status?: number } | nu
   }
   if (err?.code === 'weak_password' || m.includes('password should')) return '비밀번호가 너무 짧거나 약해요. 8자 이상으로 입력해 주세요.';
   if (err?.code === 'email_address_invalid' || m.includes('invalid email')) return '이메일 형식을 확인해 주세요.';
-  return `로그인하지 못했어요. 잠시 후 다시 시도해 주세요. (${err?.message || '알 수 없는 오류'})`;
+  return `로그인하지 못했어요. 잠시 후 다시 시도하거나 로그인 없이 둘러보기를 이용해 주세요. (${err?.message || '알 수 없는 오류'})`;
 }
+
+/** 게스트가 후보·상태·메모를 저장할 때마다 붙이는 안내 (설계서 게스트 모드) */
+const GUEST_SAVE_NOTE = '게스트 모드라 새로고침하면 사라져요. 로그인하면 저장돼요.';
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -90,7 +94,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (err) notify(`저장된 내용을 불러오지 못했어요: ${err.message} (Supabase 테이블을 만들었는지 확인해 주세요)`);
     const shortlist: Record<string, ShortItem> = {};
     for (const r of (s.data || []) as { corp_code: string; status: Status; saved_at: string }[]) {
-      shortlist[r.corp_code] = { status: r.status, saved_at: (r.saved_at || '').slice(0, 10) };
+      shortlist[r.corp_code] = { status: r.status, saved_at: kstDate(r.saved_at || '') };
     }
     const memos: Record<string, string> = {};
     for (const r of (m.data || []) as { corp_code: string; body: string }[]) memos[r.corp_code] = r.body;
@@ -214,7 +218,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setPersonal((p) => {
         const next = { ...p.shortlist };
         if (exists) delete next[corp];
-        else next[corp] = { status: '검토 전', saved_at: new Date().toISOString().slice(0, 10) };
+        else next[corp] = { status: '검토 전', saved_at: kstDate() };
         return { ...p, shortlist: next };
       });
       if (isUser) {
@@ -225,7 +229,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         q.then(({ error }) => error && notify(`저장하지 못했어요: ${error.message}`));
         notify(exists ? '후보에서 뺐어요.' : '제안 후보에 저장했어요.');
       } else {
-        notify(exists ? '후보에서 뺐어요.' : '후보에 담았어요. 게스트 모드라 새로고침하면 사라져요. 로그인하면 저장돼요.');
+        notify(exists ? '후보에서 뺐어요.' : `후보에 담았어요. ${GUEST_SAVE_NOTE}`);
       }
     },
     [personal.shortlist, isUser, userId, notify],
@@ -241,8 +245,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           .eq('user_id', userId!)
           .eq('corp_code', corp)
           .then(({ error }) => error && notify(`저장하지 못했어요: ${error.message}`));
+        notify(`상태를 '${status}'(으)로 바꿨어요.`);
+      } else {
+        notify(`상태를 '${status}'(으)로 바꿨어요. ${GUEST_SAVE_NOTE}`);
       }
-      notify(`상태를 '${status}'(으)로 바꿨어요.`);
     },
     [isUser, userId, notify],
   );
@@ -257,7 +263,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         return { ...p, memos };
       });
       if (!isUser) {
-        notify('게스트 모드라 이 화면에서만 유지돼요. 로그인하면 저장돼요.');
+        notify(body ? `메모를 남겼어요. ${GUEST_SAVE_NOTE}` : '메모를 지웠어요.');
         return;
       }
       const sb = getSupabase()!;

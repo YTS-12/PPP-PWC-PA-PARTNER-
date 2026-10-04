@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
 import { loadDetail, useSummary } from '@/lib/data';
-import { CONFIG, SERVICES, SIG, STATUSES } from '@/lib/config';
-import { dartUrl, pct, siteUrl, withCurrency, won } from '@/lib/format';
-import { priorityOf } from '@/lib/scoring';
-import type { CompanyDetail, FinRec, ServiceId, Status } from '@/lib/types';
+import { CONFIG, SIG, STATUSES } from '@/lib/config';
+import { dartUrl, pct, siteUrl, withCurrency } from '@/lib/format';
+import { scoreDetailHits } from '@/lib/scoring';
+import type { CompanyDetail, DetailHit, FinRec, Status } from '@/lib/types';
 
 const CAT_LABEL = { MNA: '합병·분할·양수 결정', DISTRESS: '부도·회생·감자', FRAUD: '횡령·배임', DEADLINE: '제출기한 연장신고' } as const;
 
@@ -34,7 +34,7 @@ export default function CompanyDetailPage() {
   const params = useParams<{ corp: string }>();
   const corp = String(params?.corp || '');
   const app = useApp();
-  const { data: summary } = useSummary();
+  const { data: summary, error: summaryError } = useSummary();
   const [d, setD] = useState<CompanyDetail | null | undefined>(undefined);
   const [memo, setMemo] = useState('');
 
@@ -51,7 +51,8 @@ export default function CompanyDetailPage() {
     setMemo(app.personal.memos[corp] || '');
   }, [corp, app.personal.memos]);
 
-  if (d === undefined) return <div className="loading">불러오는 중…</div>;
+  // 추가 수집 반영 여부(meta.extra)로 신호를 거르므로 summary도 받은 뒤 점수를 낸다. 못 받으면 추가 수집 전으로 본다
+  if (d === undefined || (!summary && !summaryError)) return <div className="loading">불러오는 중…</div>;
   if (d === null)
     return (
       <div className="empty">
@@ -61,15 +62,20 @@ export default function CompanyDetailPage() {
 
   const meta = summary?.meta;
   const saved = app.personal.shortlist[corp];
-  const keys = new Set(d.h.map((h) => h.k));
-  const score = keys.size;
-  const priority = priorityOf(score);
-  const services = SERVICES.map((s) => s.id).filter((sid) => d.h.some((h) => SIG[h.id].service === sid)) as ServiceId[];
+  // 목록과 같은 기준: 현재 조건(용역·신호·추가 수집 여부) 안의 근거 키 개수
+  const sc = scoreDetailHits(d.h, app.filters, meta?.extra);
+  const { score, priority, services } = sc;
   const fx = d.finx;
   const main: FinRec | null = fx ? fx.CFS || fx.OFS : null;
+  const foreign = !!main?.currency && main.currency !== 'KRW';
+  const noFin = meta?.extra.fin ? '주요계정 없음' : '추가 수집 후 표시';
   const debtRatio = main && main.liabilities != null && main.equity ? main.liabilities / main.equity : null;
   const nonop = main && main.pretax != null && main.op != null ? main.pretax - main.op : null;
   const nonopRatio = nonop != null && main && main.op ? Math.abs(nonop) / Math.abs(main.op) : null;
+  const ratioText = nonopRatio != null ? `영업이익의 ${pct(nonopRatio)}` : '';
+  const nonopSrc = foreign
+    ? ['외화 재무 · 규모 신호 제외', ratioText].filter(Boolean).join(' · ')
+    : ratioText || (main ? '계산 불가' : noFin);
   const samil = d.ag === 'SAMIL';
   const isUser = app.mode === 'user';
 
@@ -86,9 +92,13 @@ export default function CompanyDetailPage() {
 
   const draft = () => {
     const p = app.personal.profile;
+    // 같은 근거 키(PA3·IC3 등)는 한 줄로 묶어 개수와 목록을 맞춘다
+    const byKey = new Map<string, DetailHit[]>();
+    for (const h of sc.hits) byKey.set(h.k, [...(byKey.get(h.k) || []), h]);
+    const sigText = [...byKey.values()].map((g) => `${g.map((h) => SIG[h.id].label).join(' / ')}${g[0].d ? `(${g[0].d})` : ''}`).join(', ');
     const lines = [
       `[검토 메모 초안] ${d.n} (${d.m === 'KOSPI' ? '코스피' : '코스닥'} · ${d.ig})`,
-      `- 해당 신호 ${d.h.length}개: ${d.h.map((h) => `${SIG[h.id].label}${h.d ? `(${h.d})` : ''}`).join(', ') || '없음'}`,
+      `- 해당 신호 ${score}개${sc.total !== score ? ` (현재 조건 기준 · 전체 ${sc.total}개)` : ''}: ${sigText || '없음'}`,
       `- 검토 용역: ${services.map((s) => CONFIG.services.find((x) => x.id === s)!.name).join(', ') || '-'}`,
       `- 회사 대표 연락처: ${d.contact.phone || '-'} / ${d.contact.homepage || '-'} (DART 기업개황)`,
       `- 독립성: ${samil ? '현재 감사인 삼일 → 사내 독립성 검토 필요' : `현재 감사인 ${d.au || '미확인'} (사내 절차로 최종 확인)`}`,
@@ -145,34 +155,41 @@ export default function CompanyDetailPage() {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div className="subtle" style={{ fontSize: 12 }}>
-              해당 공시 신호
+              현재 조건 해당 신호
             </div>
             <div style={{ fontSize: 32, fontWeight: 850, color: 'var(--navy)', margin: '5px 0' }}>{score}개</div>
             {priority && <span className={`tag ${priority === '높음' ? 'green' : priority === '보통' ? '' : 'amber'}`}>우선순위 {priority}</span>}
+            {sc.total !== score && (
+              <div className="subtle" style={{ fontSize: 11, marginTop: 6 }}>
+                전체 해당 신호 {sc.total}개
+              </div>
+            )}
           </div>
         </div>
         <div className="metric-grid">
           <div className="metric">
             <div className="label">자산총계</div>
             <div className="num">{withCurrency(main?.assets ?? d.fin.assets, main?.currency || d.fin.currency)}</div>
-            <div className="src">{main ? (main.fs_div === 'CFS' ? '연결' : '별도') : d.fin.basis === 'CFS' ? '연결' : d.fin.basis === 'OFS' ? '별도' : '-'} · 2025 사업보고서</div>
+            <div className="src">
+              {main ? (main.fs_div === 'CFS' ? '연결' : '별도') : d.fin.basis === 'CFS' ? '연결' : d.fin.basis === 'OFS' ? '별도' : '-'} · {main ? `${main.bsns_year} 사업보고서` : '2025 사업보고서'}
+            </div>
           </div>
           <div className="metric">
             <div className="label">부채비율</div>
             <div className="num">{debtRatio != null ? pct(debtRatio) : '–'}</div>
-            <div className="src">{main ? '부채총계 ÷ 자본총계' : '추가 수집 후 표시'}</div>
+            <div className="src">{main ? '부채총계 ÷ 자본총계' : noFin}</div>
           </div>
           <div className="metric">
             <div className="label">영업이익 {main ? '(당기·전기·전전기)' : '(2025)'}</div>
             <div className="num" style={{ fontSize: main ? 14 : 19 }}>
-              {main ? [main.op, main.op_prev, main.op_prev2].map((v) => won(v ?? null)).join(' · ') : withCurrency(d.fin.op, d.fin.currency)}
+              {main ? [main.op, main.op_prev, main.op_prev2].map((v) => withCurrency(v, main.currency)).join(' · ') : withCurrency(d.fin.op, d.fin.currency)}
             </div>
             <div className="src">주요계정 API</div>
           </div>
           <div className="metric">
             <div className="label">영업외손익 (세전이익 − 영업이익)</div>
-            <div className="num">{nonop != null ? won(nonop) : '–'}</div>
-            <div className="src">{nonopRatio != null ? `영업이익의 ${pct(nonopRatio)}` : main ? '계산 불가' : '추가 수집 후 표시'}</div>
+            <div className="num">{nonop != null ? withCurrency(nonop, main?.currency) : '–'}</div>
+            <div className="src">{nonopSrc}</div>
           </div>
         </div>
       </div>
@@ -186,11 +203,18 @@ export default function CompanyDetailPage() {
           {d.h.length === 0 && <div className="empty">해당하는 공시 신호가 없어요.</div>}
           {d.h.map((h) => {
             const g = SIG[h.id];
+            const out = !sc.active.has(h.id);
             return (
-              <div className="reason" key={h.id}>
+              <div className="reason" key={h.id} style={out ? { opacity: 0.5 } : undefined}>
                 <div className="reason-icon">{g.service === 'RS' ? '!' : h.r && h.d ? '◈' : '↗'}</div>
                 <div style={{ minWidth: 0 }}>
                   <strong>{g.label}</strong>
+                  {out && (
+                    <>
+                      {' '}
+                      <span className="tag gray">현재 조건 밖</span>
+                    </>
+                  )}
                   <p>
                     {h.ev}
                     <br />
@@ -209,6 +233,7 @@ export default function CompanyDetailPage() {
               </div>
             );
           })}
+          {sc.hits.length < d.h.length && <p className="hint">흐리게 표시한 근거는 현재 추천 조건 밖이라 점수에 넣지 않았어요. 조건은 추천 목록에서 바꿀 수 있어요.</p>}
           <p className="hint">{CONFIG.disclaimer}</p>
         </div>
 
@@ -224,7 +249,11 @@ export default function CompanyDetailPage() {
                 <br />
               </>
             )}
-            {services.length ? services.map((s) => <div key={s}>{CONFIG.strategy[s]}</div>) : '해당 용역이 없어요.'}
+            {services.length
+              ? services.map((s) => <div key={s}>{CONFIG.strategy[s]}</div>)
+              : d.h.length
+                ? '현재 조건에 해당하는 용역이 없어요.'
+                : '해당 용역이 없어요.'}
           </div>
           <div style={{ marginTop: 15 }}>
             <strong style={{ fontSize: 13 }}>추천 용역</strong>
@@ -346,7 +375,7 @@ export default function CompanyDetailPage() {
                 <div>
                   <b>{f.t}</b>
                   <div className="subtle" style={{ fontSize: 11, marginTop: 3 }}>
-                    {CAT_LABEL[f.cat]} · {f.d} · 접수번호 {f.r}
+                    {f.cat === 'MNA' && !meta?.extra.major ? '합병·양수 결정' : CAT_LABEL[f.cat]} · {f.d} · 접수번호 {f.r}
                   </div>
                 </div>
                 <a href={dartUrl(f.r)} target="_blank" rel="noreferrer">

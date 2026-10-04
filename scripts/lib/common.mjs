@@ -41,8 +41,8 @@ export function excludeReason(c) {
 
 /**
  * 추가 수집 대상 기업 목록 (스팩·리츠·펀드 제외).
- * 저장소의 data/universe.json을 먼저 쓴다(npm run data:build가 만듦). 그래서 수집 담당은 기존 수집본 폴더 없이
- * 저장소와 본인 키만으로 수집할 수 있고, 모두 같은 목록을 써서 --part 분할이 어긋나지 않는다.
+ * 저장소의 data/universe.json을 먼저 쓴다(npm run data:build가 만듦). 그래서 수집하는 PC는 기존 수집본 폴더 없이
+ * 저장소와 키만으로 수집할 수 있고, 여럿이 --part로 나눠도 같은 목록을 써서 어긋나지 않는다.
  */
 export function loadUniverse() {
   if (fs.existsSync(UNIVERSE_FILE)) {

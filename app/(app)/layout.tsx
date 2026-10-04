@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
+import { leaving, useLeaveToLogin } from '@/components/ModeBanner';
 
 const NAV = [
   { href: '/dashboard', ico: '▦', label: '대시보드' },
@@ -21,20 +22,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const app = useApp();
   const router = useRouter();
   const path = usePathname() || '/dashboard';
+  const onAuth = useLeaveToLogin();
 
+  // 로그인·로그아웃 버튼으로 나가는 중이면 그쪽에서 한 번만 이동한다
   useEffect(() => {
-    if (app.ready && !app.mode) router.replace(`/?next=${encodeURIComponent(path)}`);
+    if (app.ready && !app.mode && !leaving.current) router.replace(`/?next=${encodeURIComponent(path)}`);
   }, [app.ready, app.mode, path, router]);
+
+  // 로그인 화면으로 나가면 표시를 지워, 뒤로 가기로 돌아와도 다시 /?next=로 보낸다
+  useEffect(
+    () => () => {
+      leaving.current = false;
+    },
+    [],
+  );
 
   if (!app.ready || !app.mode) return <div className="loading">불러오는 중…</div>;
 
   const isUser = app.mode === 'user';
   const name = app.displayName || '사용자';
-
-  async function onAuth() {
-    await app.logout();
-    router.replace('/');
-  }
 
   return (
     <>

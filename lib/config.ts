@@ -1,4 +1,5 @@
 import raw from '@/config/signals.json';
+import { won } from './format';
 import type { ExtraKey, Filters, ServiceId } from './types';
 
 export interface SignalDef {
@@ -33,11 +34,20 @@ export const SVC: Record<ServiceId, ServiceDef> = Object.fromEntries(SERVICES.ma
 >;
 export const STATUSES = ['검토 전', '검토 중', '제안 대상', '제외'] as const;
 
+/** 규모 기준 금액 표기. 천억 단위로 떨어지면 '5천억'처럼 줄이고, 그 밖은 won() 표기를 따른다 */
+function sizeAmount(n: number): string {
+  if (n > 0 && n < 1e12 && n % 1e11 === 0) return `${n / 1e11}천억`;
+  return won(n);
+}
+
+const SIZE_LARGE = sizeAmount(Number(CONFIG.params.sizeLarge));
+const SIZE_MID = sizeAmount(Number(CONFIG.params.sizeMid));
+
 export const SIZE_LABEL: Record<string, string> = {
   all: '전체',
-  L: '2조 원 이상',
-  M: '5천억 ~ 2조 원',
-  S: '5천억 원 미만',
+  L: `${SIZE_LARGE} 원 이상`,
+  M: `${SIZE_MID} ~ ${SIZE_LARGE} 원`,
+  S: `${SIZE_MID} 원 미만`,
 };
 
 export const INDUSTRY_GROUPS = [
