@@ -48,13 +48,49 @@ function won(n) {
 const pct = (x) => `${Math.round(x * 100)}%`;
 
 // ---------- 감사인 ----------
+// 감사인 이름처럼 보이는지 (auditor-2026h1.mjs의 looksLikeAuditor와 같은 결과): 공백을 지운 뒤
+// '회계'(오타 '회게'·'화계'·'…계법인' 포함)·'감사반'이나 대형·외국계 법인 이름이 있으면 감사인으로 본다.
+// 'EY'는 대문자이고 앞이 영문이 아닐 때만. 감사의견·문서명('감사보고서' 등)·'해당사항없음'·'-'는 감사인이 아니다
+const NOT_AUDITOR = new Set(['적정', '한정', '부적정', '의견거절', '감사보고서', '연결감사보고서', '해당사항없음', '해당없음', '-']);
+const AUDITOR_RE = /회계|회게|화계|계법인|감사반|삼일|삼정|안진|한영|이촌|딜로이트|KPMG|Deloitte|PwC|(^|[^A-Za-z])EY/;
+const looksLikeAuditor = (s) => {
+  const t = String(s ?? '').replace(/\s+/g, '');
+  return !NOT_AUDITOR.has(t) && AUDITOR_RE.test(t);
+};
+
+/**
+ * 감사인 비교용 이름 (PA2 연속 판정·감사인 그룹 공용). 화면에 보이는 원문(au, hist)은 바꾸지 않는다.
+ * 괄호와 그 안(겹괄호 포함)·주식회사·㈜·'대표이사 …'·공백·기호를 지우고, 오타(회게법인·화계법인 등)를 고친 뒤
+ * 대형 4곳은 '삼일'·'삼정'·'안진'·'한영'으로 통일, 나머지는 맨 앞 영문 접두(EY·딜로이트·Deloitte·KPMG·PwC)와
+ * 앞뒤의 '회계법인'을 뗀다. 예: 'EY한영회계법인'·'한영 회계법인' → '한영', '회계법인 세일원'·'세일원 회계법인' → '세일원'
+ * 같은 이름 반복을 지운 뒤에도 '회계법인'이 두 번 이상이면 서로 다른 법인 두 곳을 함께 적은 것으로 보고
+ * 통일하지 않은 정리된 전체를 돌려준다. 예: '대주회계법인 삼일회계법인' → '대주회계법인삼일회계법인'
+ * (감사인 그룹은 includes 기준이라 삼일이 들어 있으면 그대로 SAMIL)
+ */
 function normAuditor(a) {
-  return (a || '')
-    .replace(/\([^)]*\)/g, '')
+  let s = String(a ?? '');
+  for (let prev = ''; prev !== s; ) {
+    prev = s;
+    s = s.replace(/[(（][^()（）]*[)）]/g, ''); // 안쪽 괄호부터: '동현회계법인((구)영앤진회계법인)'
+  }
+  s = s
+    .replace(/[()（）]/g, '') // 짝 없는 괄호: '태일회계법인 (*주1))'
     .replace(/주식회사|㈜/g, '')
     .replace(/\s+/g, '')
-    .replace(/^EY/, '')
-    .trim();
+    .replace(/(대표이사|대표공인회계사).*$/, '') // '삼일회계법인 대표이사 윤 훈 수'
+    .replace(/[^0-9A-Za-z가-힣]/g, '') // '우리회계법인-'
+    .replace(/회게법인|화계법인|회계(겁인|버인|벙인)/g, '회계법인') // '동아송강회게법인'·'삼화화계법인'·'신한회계겁인'
+    .replace(/회계법$/, '회계법인') // '대성삼경회계법'
+    .replace(/(^|[^회])계법인$/, '$1회계법인') // '우리계법인'
+    .replace(/^(.+?)\1+$/, '$1'); // 같은 이름 반복: '안경회계법인 안경회계법인'
+  if ((s.match(/회계법인/g) || []).length >= 2) return s; // 두 법인 함께 표기: '삼정회계법인 삼일회계법인'
+  const big = ['삼일', '삼정', '안진', '한영'].find((b) => s.includes(b)); // auditorGroup과 같은 순서
+  if (big) return big;
+  const core = s
+    .replace(/^(EY|딜로이트|Deloitte|KPMG|PwC)+/i, '')
+    .replace(/^회계법인/, '')
+    .replace(/회계(법인)?$/, ''); // '우리회계'
+  return core || s;
 }
 function auditorGroup(norm) {
   if (!norm) return '';
@@ -131,7 +167,8 @@ function main() {
     deadline: extraDeadline.collected,
   };
 
-  // 기준일은 한국 날짜로 맞춘다 (추가 수집 기록은 UTC로 저장됨)
+  // 기준일은 한국 날짜로 맞춘다 (추가 수집 기록은 UTC로 저장됨).
+  // 추가 수집 기록의 collectedAt을 그대로 쓴다: 캐시로 같은 결과를 다시 저장하면 writeExtraMeta가 처음 날짜를 유지한다.
   const kstDate = (iso) => {
     const t = Date.parse(iso || '');
     return Number.isFinite(t) ? new Date(t + 9 * 3600e3).toISOString().slice(0, 10) : '';
@@ -153,7 +190,9 @@ function main() {
     // 같은 기준이 두 연도로 있으면 최신 연도 우선
     if (!slot[r.fs_div] || slot[r.fs_div].bsns_year < r.bsns_year) slot[r.fs_div] = r;
   }
-  const audBy = new Map(extraAud.rows.filter((r) => r.auditor_raw).map((r) => [r.corp_code, r]));
+  // 감사인 수집분: 감사인 이름이 아닌 값('적정'·'감사보고서' 등)은 쓰지 않는다 → 2025 사업보고서 감사인을 쓴다 (수집 쪽과 이중 안전장치)
+  const audBy = new Map(extraAud.rows.filter((r) => r.auditor_raw && looksLikeAuditor(r.auditor_raw)).map((r) => [r.corp_code, r]));
+  const audIgnored = extraAud.rows.filter((r) => r.auditor_raw && !looksLikeAuditor(r.auditor_raw));
   const majorBy = groupBy(extraMajor.rows, (r) => r.corp_code);
   const krxBy = groupBy(extraKrx.rows, (r) => r.corp_code);
   const deadlineBy = groupBy(extraDeadline.rows, (r) => r.corp_code);
@@ -191,6 +230,12 @@ function main() {
     const opBase = ((c.financials || {}).operating_profit || {}).value ?? null;
     const fx = finBy.get(corp) || null;
     const fxKrw = (rec) => (rec && (rec.currency || 'KRW') === 'KRW' ? rec : null);
+    // 주요계정이 기존 수집본 사업연도(2025)가 아닌 해(보완한 2024 등)면 근거 문구에 연도를 붙인다 (IC1·IF1·IF3·RS3).
+    // 기존 수집본 재무로 판정할 때는 붙이지 않는다
+    const fyTag = (rec) => {
+      const y = Number(rec && rec.bsns_year);
+      return y && y !== Number(base.meta.fiscal_year) ? ` · ${y} 사업보고서` : '';
+    };
     if (cur && cur !== 'KRW') notes.push(`재무 통화가 ${cur}라서 규모 기준 신호(IC1·IF1·IF3·RS3)는 판정하지 않았어요.`);
     if (!fa && !fx) notes.push('2025 사업보고서 재무가 없어(신규 상장 등) 재무 기준 신호는 판정하지 않았어요.');
 
@@ -269,7 +314,7 @@ function main() {
     if (fx && (fx.CFS || fx.OFS)) {
       const rec = fxKrw(P.ic1AssetBasis === 'CFS' ? fx.CFS : fx.OFS);
       if (fx.CFS && rec && rec.assets != null && rec.assets >= P.ic1MinAssets && rec.assets < P.ic1MaxAssets) {
-        addHit('IC1', `자산총계 ${won(rec.assets)}(${P.ic1AssetBasis === 'CFS' ? '연결' : '별도'}) · 연결 작성 → 2029 사업연도 연결 내부회계 감사(현행 일정)`, '', `FIN:${corp}:IC1`, rec.rcept_no);
+        addHit('IC1', `자산총계 ${won(rec.assets)}(${P.ic1AssetBasis === 'CFS' ? '연결' : '별도'})${fyTag(rec)} · 연결 작성 → 2029 사업연도 연결 내부회계 감사(현행 일정)`, '', `FIN:${corp}:IC1`, rec.rcept_no);
       }
     } else if (basis === 'CFS' && krwAssets != null && krwAssets >= P.ic1MinAssets && krwAssets < P.ic1MaxAssets) {
       addHit('IC1', `연결 자산총계 ${won(krwAssets)} · 연결 작성 → 2029 사업연도 연결 내부회계 감사(현행 일정, 연결 자산 근사)`, '', `FIN:${corp}:IC1`, fa.rcept_no || '');
@@ -283,7 +328,7 @@ function main() {
     const cfsRec = fx ? fxKrw(fx.CFS) : null;
     const cfsAssets = cfsRec ? cfsRec.assets : basis === 'CFS' ? krwAssets : null;
     if (cfsAssets != null && cfsAssets >= P.if3MinAssets) {
-      addHit('IF3', `연결 자산총계 ${won(cfsAssets)} · 연결 작성`, '', `FIN:${corp}:IF3`, (cfsRec && cfsRec.rcept_no) || (fa && fa.rcept_no) || '');
+      addHit('IF3', `연결 자산총계 ${won(cfsAssets)} · 연결 작성${cfsRec ? fyTag(cfsRec) : ''}`, '', `FIN:${corp}:IF3`, (cfsRec && cfsRec.rcept_no) || (fa && fa.rcept_no) || '');
     }
 
     // --- IF1 영업외손익 비중 (추가 수집 필요) ---
@@ -293,7 +338,7 @@ function main() {
       const ratio = mainRec.op !== 0 ? Math.abs(nonop) / Math.abs(mainRec.op) : Infinity;
       if (Math.abs(nonop) >= P.if1MinAbs && ratio >= P.if1Ratio) {
         const label = mainRec.op === 0 ? '(영업이익 0)' : `(영업이익의 ${pct(ratio)})`;
-        addHit('IF1', `영업외손익 ${nonop >= 0 ? '+' : ''}${won(nonop)} ${label} · ${mainRec.fs_div === 'CFS' ? '연결' : '별도'}`, '', `FIN:${corp}:IF1`, mainRec.rcept_no, ratio === Infinity ? null : ratio);
+        addHit('IF1', `영업외손익 ${nonop >= 0 ? '+' : ''}${won(nonop)} ${label} · ${mainRec.fs_div === 'CFS' ? '연결' : '별도'}${fyTag(mainRec)}`, '', `FIN:${corp}:IF1`, mainRec.rcept_no, ratio === Infinity ? null : ratio);
       }
     }
 
@@ -308,10 +353,10 @@ function main() {
       const cap = mainRec.capital;
       const eq = mainRec.equity;
       if (eq <= 0) {
-        addHit('RS3', `전액잠식 (자본총계 ${won(eq)}, 자본금 ${won(cap)})`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, 1);
+        addHit('RS3', `전액잠식 (자본총계 ${won(eq)}, 자본금 ${won(cap)})${fyTag(mainRec)}`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, 1);
       } else if ((cap - eq) / cap >= P.rs3Ratio) {
         const r = (cap - eq) / cap;
-        addHit('RS3', `자본잠식률 ${pct(r)} (자본금 ${won(cap)}, 자본총계 ${won(eq)})`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, r);
+        addHit('RS3', `자본잠식률 ${pct(r)} (자본금 ${won(cap)}, 자본총계 ${won(eq)})${fyTag(mainRec)}`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, r);
       }
     }
 
@@ -408,6 +453,10 @@ function main() {
   const size = fs.statSync(path.join(OUT, 'summary.json')).size;
   log(`데이터 기준일 ${asOf} · 대상 ${summary.length}곳 (제외: 스팩 ${excluded.spac}, 리츠·펀드 ${excluded.reitFund})`);
   log(`추가 수집 반영: ${Object.entries(extra).map(([k, v]) => `${k}=${v ? 'O' : '-'}`).join(' ')}`);
+  if (audIgnored.length) {
+    const eg = [...new Set(audIgnored.map((r) => r.auditor_raw))].slice(0, 5).join(', ');
+    log(`2026 반기 감사인 중 감사인 이름이 아닌 값 ${audIgnored.length}곳은 쓰지 않고 2025 감사인을 썼어요 (예: ${eg})`);
+  }
   log(`신호별 해당 기업 수: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
   log(`summary.json ${(size / 1024).toFixed(0)}KB, detail 파일 ${Object.keys(buckets).length}개 → ${OUT}`);
   log(`추가 수집 대상 목록 ${universe.length}곳 → data/universe.json`);

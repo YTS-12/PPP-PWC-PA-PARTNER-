@@ -17,10 +17,13 @@ export async function GET(req: Request) {
   if (!url || !key) {
     return Response.json({ ok: false, reason: 'Supabase 환경변수가 없어요.' }, { status: 503 });
   }
+  // 새 publishable 키(sb_publishable_…)는 apikey 헤더로만 보내야 한다. 예전 anon 키(JWT)일 때만 Bearer도 붙인다.
+  const headers: Record<string, string> = { apikey: key };
+  if (key.startsWith('eyJ')) headers.Authorization = `Bearer ${key}`;
   let res: Response;
   try {
     res = await fetch(`${url}/rest/v1/profiles?select=user_id&limit=1`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      headers,
       cache: 'no-store',
     });
   } catch {

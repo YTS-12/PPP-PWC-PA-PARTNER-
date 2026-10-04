@@ -1,5 +1,6 @@
 // 수집·빌드 스크립트 공통 모듈: 환경변수, 경로, jsonl, 기간 계산, 대상 기업 목록
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,6 +69,14 @@ export function arg(name, fallback = null) {
   return fallback;
 }
 export const hasFlag = (name) => process.argv.includes(name);
+/**
+ * 값이 필요한 플래그를 값 없이 줬는지: '--part' 뒤에 값이 없거나 다음 칸이 '--…'(예: --part --year 2026), 또는 '--part='.
+ * 이때 arg() 는 기본값을 돌려줘서 모르는 사이 기본값으로 수집하게 되니, 수집 스크립트가 main() 첫머리에서 멈춘다.
+ */
+export function missingValue(name) {
+  if (process.argv.includes(name) && arg(name) === null) return true;
+  return process.argv.includes(`${name}=`);
+}
 
 export function writeJsonl(file, rows) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -106,13 +115,28 @@ export function readExtraMeta() {
   }
   return meta;
 }
-export function writeExtraMeta(name, info) {
+/**
+ * rows(결과 배열)를 주면 해시(sha1)를 hash 로 남긴다. 해시는 기록 내용(info, collectedAt·hash 제외)과 rows 를 함께 본다.
+ * 기존 기록과 hash 가 같으면 collectedAt 을 그대로 둔다(캐시로 같은 결과를 다시 쓸 때 데이터 기준일이 밀리지 않게).
+ * 결과가 같아도 조회 구간(from·to) 같은 info 가 바뀌면 새 시각이 된다. rows 를 안 주면 늘 지금 시각.
+ */
+export function writeExtraMeta(name, info, rows) {
   fs.mkdirSync(EXTRA_DIR, { recursive: true });
-  fs.writeFileSync(
-    path.join(EXTRA_DIR, `${name}${META_SUFFIX}`),
-    JSON.stringify({ ...info, collectedAt: new Date().toISOString() }, null, 2),
-    'utf8',
-  );
+  const file = path.join(EXTRA_DIR, `${name}${META_SUFFIX}`);
+  const { collectedAt: _at, hash: _hash, ...plain } = info || {};
+  const out = { ...plain };
+  let collectedAt = new Date().toISOString();
+  if (Array.isArray(rows)) {
+    out.hash = crypto.createHash('sha1').update(JSON.stringify({ info: plain, rows })).digest('hex');
+    let prev = null;
+    try {
+      prev = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      // 기록이 없거나 깨졌으면 새 시각을 쓴다
+    }
+    if (prev && prev.hash === out.hash && prev.collectedAt) collectedAt = prev.collectedAt;
+  }
+  fs.writeFileSync(file, JSON.stringify({ ...out, collectedAt }, null, 2), 'utf8');
 }
 
 // ---------- 날짜 ----------

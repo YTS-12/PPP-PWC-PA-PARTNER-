@@ -35,6 +35,14 @@ export interface RecentItem {
   samil: boolean;
 }
 
+/** data/extra/<이름>.meta.json 한 개(수집 기록). 명령마다 필드가 달라 공통으로 쓰는 것만 적고, 화면에서는 값을 확인한 뒤 쓴다 */
+export interface ExtraMetaRecord {
+  collectedAt?: string;
+  records?: number;
+  hash?: string;
+  [field: string]: unknown;
+}
+
 export interface SummaryMeta {
   dataAsOf: string;
   baseCollectedAt: string;
@@ -44,7 +52,7 @@ export interface SummaryMeta {
   included: number;
   excluded: { spac: number; reitFund: number };
   extra: Record<ExtraKey, boolean>;
-  extraMeta: Record<string, { collectedAt?: string }>;
+  extraMeta: Record<string, ExtraMetaRecord>;
   signalCounts: Record<string, number>;
   recent: RecentItem[];
   recent3m: number;
