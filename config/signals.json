@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "params": {
+    "recentDays": 365,
+    "ic1MinAssets": 500000000000,
+    "ic1MaxAssets": 2000000000000,
+    "ic1AssetBasis": "OFS",
+    "if1Ratio": 0.3,
+    "if1MinAbs": 1000000000,
+    "if3MinAssets": 500000000000,
+    "rs3Ratio": 0.5,
+    "sizeLarge": 2000000000000,
+    "sizeMid": 500000000000
+  },
+  "services": [
+    { "id": "PA", "name": "회계·결산 지원 (PA)", "short": "회계·결산 지원" },
+    { "id": "IC", "name": "내부회계관리제도", "short": "내부회계" },
+    { "id": "IFRS18", "name": "IFRS 18 도입 지원", "short": "IFRS 18" },
+    { "id": "RS", "name": "재무자문·구조조정", "short": "재무자문·구조조정" }
+  ],
+  "signals": [
+    {
+      "id": "PA1",
+      "service": "PA",
+      "label": "사업보고서 제출기한 연장신고 이력",
+      "source": "공시검색",
+      "needs": "deadline",
+      "caution": ""
+    },
+    {
+      "id": "PA2",
+      "service": "PA",
+      "label": "주기적 지정 도래 추정 (6+3)",
+      "source": "회계감사인",
+      "needs": null,
+      "caution": "2026년부터 회계·감사 지배구조 우수기업은 주기적 지정이 3년 유예돼 '9년 자유선임 + 3년 지정'이 됩니다(2025.5.20 시행 외부감사법 시행령). 유예 여부와 과거 지정 이력은 공시로 확인할 수 없어 추정입니다."
+    },
+    {
+      "id": "PA3",
+      "service": "PA",
+      "label": "합병·분할·영업양수 결정",
+      "source": "공시검색(주요사항보고서)",
+      "needs": null,
+      "caution": "추가 수집 전에는 기존 수집본의 분류(합병·주식양수·영업양수·주식교환)만 쓰고, 회사분할결정은 빠져 있습니다."
+    },
+    {
+      "id": "IC1",
+      "service": "IC",
+      "label": "2029 연결 내부회계 감사 대상",
+      "source": "주요계정",
+      "needs": null,
+      "caution": "판정 자산은 별도 자산총계로 가정했고, 일정은 현행 기준입니다. 추가 수집 전에는 연결 자산총계로 근사합니다."
+    },
+    {
+      "id": "IC2",
+      "service": "IC",
+      "label": "횡령·배임 혐의 발생 공시",
+      "source": "공시검색(거래소공시)",
+      "needs": "krx",
+      "caution": ""
+    },
+    {
+      "id": "IC3",
+      "service": "IC",
+      "label": "합병·분할·영업양수 결정 (통제 통합)",
+      "source": "공시검색(주요사항보고서)",
+      "needs": null,
+      "caution": ""
+    },
+    {
+      "id": "IF1",
+      "service": "IFRS18",
+      "label": "영업외손익 비중 큼",
+      "source": "주요계정",
+      "needs": "fin",
+      "caution": "기타손익과 금융·지분법손익이 섞인 근사치입니다. 정밀 분석은 제안 단계에서 합니다."
+    },
+    {
+      "id": "IF2",
+      "service": "IFRS18",
+      "label": "지주회사·금융업",
+      "source": "기업개황(업종코드)",
+      "needs": null,
+      "caution": ""
+    },
+    {
+      "id": "IF3",
+      "service": "IFRS18",
+      "label": "자산 5천억 이상 + 연결",
+      "source": "주요계정",
+      "needs": null,
+      "caution": ""
+    },
+    {
+      "id": "RS1",
+      "service": "RS",
+      "label": "부도·회생·채권은행 관리·감자 공시",
+      "source": "공시검색(주요사항보고서)",
+      "needs": "major",
+      "caution": ""
+    },
+    {
+      "id": "RS2",
+      "service": "RS",
+      "label": "감사의견 비적정",
+      "source": "회계감사인",
+      "needs": null,
+      "caution": ""
+    },
+    {
+      "id": "RS3",
+      "service": "RS",
+      "label": "자본잠식 50% 이상",
+      "source": "주요계정",
+      "needs": "fin",
+      "caution": "상장규정은 지배기업 소유주지분 기준이라 근사치입니다."
+    }
+  ],
+  "extras": {
+    "fin": { "label": "주요계정 재수집 (연결·별도 전체 계정)", "command": "npm run collect:fin" },
+    "auditor2026": { "label": "2026 반기 감사인", "command": "npm run collect:auditor" },
+    "major": { "label": "주요사항보고서 12개월", "command": "npm run collect:major" },
+    "krx": { "label": "거래소공시 12개월 (횡령·배임)", "command": "npm run collect:krx" },
+    "deadline": { "label": "제출기한 연장신고 (3개년)", "command": "npm run collect:deadline" }
+  },
+  "strategy": {
+    "PA": "결산 일정과 감사 대응 부담을 줄이기 위한 결산 프로세스 진단과 재무제표·주석 작성 지원 범위를 논의해 볼 수 있어요.",
+    "IC": "2029년 연결 내부회계 감사 일정에 맞춘 현황 진단(갭 분석)과 단계별 구축 로드맵을 제안해 볼 수 있어요. 횡령·배임 공시가 있으면 자금 통제 재설계를 먼저 다뤄요.",
+    "IFRS18": "2027년 시행에 대비한 손익 구분 영향 분석, 2026년 비교정보 재작성, 연결 보고 양식 변경 준비를 제안해 볼 수 있어요.",
+    "RS": "유동성·차입 구조를 점검하는 재무구조 진단과 개선 방안 검토를 제안하되, 공시 신호만으로 위기를 단정하지 않아요.",
+    "SAMIL": "감사 고객이므로 제안 전 독립성 검토가 먼저예요."
+  },
+  "disclaimer": "공시 신호 기반 검토 후보이며 용역 수요를 확정하지 않습니다. 독립성은 사내 절차로 최종 확인하세요."
+}
