@@ -283,8 +283,13 @@ function main() {
     const mna = recentOnly(majorList.filter((f) => RE_MNA.test(baseTitle(f.t))));
     const distress = recentOnly(majorList.filter((f) => RE_DISTRESS.test(baseTitle(f.t))));
     const fraud = recentOnly((krxBy.get(corp) || []).map((f) => ({ t: f.report_nm, d: isoDate(f.rcept_dt), r: f.rcept_no })).filter((f) => RE_FRAUD.test(f.t)));
+    // 연장신고 대상 사업연도: 제목의 '(2023.12)' → 2023. 없으면 제출 연도 − 1 (3월 제출 = 직전 사업연도 보고서)
+    const fiscalOf = (f) => {
+      const m = baseTitle(f.report_nm).match(/\((\d{4})\.\d{1,2}\)/);
+      return m ? Number(m[1]) : (f.year || Number(isoDate(f.rcept_dt).slice(0, 4))) - 1;
+    };
     const ext = (deadlineBy.get(corp) || [])
-      .map((f) => ({ t: f.report_nm, d: isoDate(f.rcept_dt), r: f.rcept_no, y: f.year || Number(isoDate(f.rcept_dt).slice(0, 4)) }))
+      .map((f) => ({ t: f.report_nm, d: isoDate(f.rcept_dt), r: f.rcept_no, y: fiscalOf(f) }))
       .filter((f) => isDeadline(baseTitle(f.t)))
       .sort((a, b) => b.d.localeCompare(a.d));
 
@@ -300,9 +305,15 @@ function main() {
     if (extra.krx) filingHit('IC2', fraud);
     if (extra.deadline && ext.length) {
       const years = [...new Set(ext.map((f) => f.y))].sort();
-      const consec = years.some((y, i) => i > 0 && years[i - 1] === y - 1);
+      // 가장 긴 연속 사업연도 수 (2년 이상이면 표시)
+      let run = 1;
+      let best = 1;
+      for (let i = 1; i < years.length; i++) {
+        run = years[i] === years[i - 1] + 1 ? run + 1 : 1;
+        best = Math.max(best, run);
+      }
       const latest = ext[0];
-      addHit('PA1', `${years.join('·')}년 사업보고서 제출기한 연장신고${consec ? ' (2년 연속)' : ''}`, latest.d, latest.r, latest.r);
+      addHit('PA1', `${years.join('·')} 사업연도 사업보고서 제출기한 연장신고${best >= 2 ? ` (${best}년 연속)` : ''}`, latest.d, latest.r, latest.r);
     }
     for (const f of mna) filings.push({ cat: 'MNA', ...f });
     for (const f of distress) filings.push({ cat: 'DISTRESS', ...f });
