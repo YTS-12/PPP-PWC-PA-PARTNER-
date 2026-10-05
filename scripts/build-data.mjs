@@ -500,6 +500,8 @@ function main() {
       ag,
       ...(ae ? { ae } : {}),
       a: krwAssets,
+      rv: cur === 'KRW' ? revenueBase : null,
+      op: cur === 'KRW' ? opBase : null,
       sz,
       ceo: c.ceo || '',
       ph: ct.phone || '',

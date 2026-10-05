@@ -19,6 +19,8 @@ export interface CompanySummary {
   /** 현재 감사인을 공시에서 못 찾아 이력으로 추정했을 때 그 연도(사업보고서 기준). 없으면 추정 아님 */
   ae?: number;
   a: number | null; // 자산총계(원)
+  rv?: number | null; // 매출액(원, 원화 재무만)
+  op?: number | null; // 영업이익(원, 원화 재무만)
   sz: SizeBand;
   ceo: string;
   ph: string;

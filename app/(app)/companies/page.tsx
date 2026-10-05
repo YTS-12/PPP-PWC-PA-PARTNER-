@@ -1,64 +1,75 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
 import { applyFilters, leadHit, type Scored } from '@/lib/scoring';
 import { CONFIG, INDUSTRY_GROUPS, SERVICES, SIGNALS, SIG, SIZE_LABEL, SVC, auditorGroupText, auditorTag, cautionOf, defaultFilters, signalAvailable } from '@/lib/config';
 import { siteUrl, won } from '@/lib/format';
+import { auditorGroupLabel, downloadCsv } from '@/lib/csv';
 import ModeBanner from '@/components/ModeBanner';
 import type { Filters, ServiceId } from '@/lib/types';
 
 const PAGE = 50;
+const PIN_KEY = 'pa.pinnedRows';
 
-function csvCell(v: unknown): string {
-  const s = String(v ?? '');
-  return `"${s.replace(/"/g, '""')}"`;
+/** 행을 눌러 고정한 기업 (이 탭 안에서만 유지 — 상세에 다녀와도 남음) */
+function usePinned() {
+  const [pinned, setPinned] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(PIN_KEY);
+      if (raw) setPinned(new Set(JSON.parse(raw) as string[]));
+    } catch {}
+  }, []);
+  const toggle = (corp: string) =>
+    setPinned((prev) => {
+      const next = new Set(prev);
+      if (next.has(corp)) next.delete(corp);
+      else next.add(corp);
+      try {
+        sessionStorage.setItem(PIN_KEY, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+  return { pinned, toggle };
 }
 
 function exportCsv(rows: Scored[], asOf: string) {
-  const header = ['기업', '종목코드', '시장', '업종', '점수', '우선순위', '해당 신호', '추천 용역', '현재 감사인', '감사인 구분', '자산총계(원)', '대표자', '대표전화', '팩스', '홈페이지', '주소'];
-  const lines = [header.map(csvCell).join(',')];
-  for (const c of rows) {
-    lines.push(
-      [
-        c.n,
-        c.s,
-        c.m,
-        c.ig,
-        c.score,
-        c.priority,
-        c.hits.map((h) => SIG[h[0]].label).join(' / '),
-        c.services.map((s) => SVC[s].name).join(' / '),
-        c.au,
-        auditorGroupText(c.ag, c.ae),
-        c.a ?? '',
-        c.ceo,
-        c.ph,
-        c.fx,
-        c.hp,
-        c.ad,
-      ]
-        .map(csvCell)
-        .join(','),
-    );
-  }
-  // 맨 끝에 빈 줄을 두고 기준일·면책 문구를 첫 칸에만 넣는다(열 구조 유지)
-  lines.push('', csvCell(`데이터 기준일 ${asOf}`), csvCell(CONFIG.disclaimer));
-  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `추천기업_${asOf}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const header = ['기업', '종목코드', '시장', '업종', '점수', '우선순위', '해당 신호', '추천 용역', '현재 감사인', '감사인 구분', '자산총계(원)', '매출액(원)', '영업이익(원)', '대표자', '대표전화', '팩스', '홈페이지', '주소'];
+  downloadCsv(
+    `추천기업_${asOf}.csv`,
+    header,
+    rows.map((c) => [
+      c.n,
+      c.s,
+      c.m,
+      c.ig,
+      c.score,
+      c.priority,
+      c.hits.map((h) => SIG[h[0]].label).join(' / '),
+      c.services.map((s) => SVC[s].name).join(' / '),
+      c.au,
+      auditorGroupLabel(c.ag, c.ae),
+      c.a ?? '',
+      c.rv ?? '',
+      c.op ?? '',
+      c.ceo,
+      c.ph,
+      c.fx,
+      c.hp,
+      c.ad,
+    ]),
+    // 맨 끝에 빈 줄을 두고 기준일·면책 문구를 첫 칸에만 넣는다(열 구조 유지)
+    [`데이터 기준일 ${asOf}`, CONFIG.disclaimer],
+  );
 }
 
 export default function CompaniesPage() {
   const app = useApp();
   const { data, error } = useSummary();
   const [limit, setLimit] = useState(PAGE);
+  const { pinned, toggle: togglePin } = usePinned();
   const f = app.filters;
   const extra = data?.meta.extra;
 
@@ -70,6 +81,11 @@ export default function CompaniesPage() {
 
   if (error) return <div className="notice">{error}</div>;
   if (!data) return <div className="loading">데이터를 불러오는 중…</div>;
+
+  // 지금 보이는(고른 용역에 속하고 판정 가능한) 신호 중 선택된 개수
+  const pickedSignals = SIGNALS.filter(
+    (g) => f.services.includes(g.service) && signalAvailable(g.id, extra) && f.signals.includes(g.id),
+  ).length;
 
   const set = (patch: Partial<Filters>) => {
     setLimit(PAGE);
@@ -101,7 +117,13 @@ export default function CompaniesPage() {
             </label>
           ))}
         </div>
-        <div className="crit-grid">
+        <details className="crit-fold">
+          <summary>
+            세부 공시 조건 설정
+            <span className="count-badge">{pickedSignals}개 선택됨</span>
+            <span className="subtle fold-hint">펼쳐서 신호별로 고르기</span>
+          </summary>
+          <div className="crit-grid">
           {SERVICES.filter((s) => f.services.includes(s.id)).map((s) => (
             <div className="crit-group" key={s.id}>
               <h4>{s.name}</h4>
@@ -121,7 +143,8 @@ export default function CompaniesPage() {
               })}
             </div>
           ))}
-        </div>
+          </div>
+        </details>
         <div className="filter-row">
           <input type="search" placeholder="기업명 또는 종목코드 검색" value={f.query} onChange={(e) => set({ query: e.target.value })} />
           <select value={f.market} onChange={(e) => set({ market: e.target.value as Filters['market'] })} aria-label="시장">
@@ -176,16 +199,22 @@ export default function CompaniesPage() {
           <span className="pill">{f.hideSamil ? `삼일 감사 고객 ${hiddenSamil}곳 숨김` : '삼일 감사 고객 포함'}</span>
         </div>
         <div className="table-wrap">
-          <table>
+          <table className="co-table">
             <thead>
               <tr>
-                <th>기업</th>
-                <th>점수</th>
-                <th>주요 근거</th>
-                <th>추천 용역</th>
-                <th>대표 연락처</th>
-                <th>우선순위</th>
-                <th>작업</th>
+                <th className="col-co">기업</th>
+                <th className="col-fin">
+                  매출
+                  <span className="th-sub">영업이익</span>
+                </th>
+                <th className="col-score" title={`고른 신호 ${pickedSignals}개 중 해당하는 근거 수 (같은 공시로 걸린 신호는 1개로 셈)`}>
+                  점수<span className="th-sub">/{pickedSignals}</span>
+                </th>
+                <th className="col-ev">주요 근거</th>
+                <th className="col-svc">추천 용역</th>
+                <th className="col-contact">대표 연락처</th>
+                <th className="col-pri">우선순위</th>
+                <th className="col-act">작업</th>
               </tr>
             </thead>
             <tbody>
@@ -194,8 +223,17 @@ export default function CompaniesPage() {
                 const at = auditorTag(c.ag, c.ae);
                 const saved = !!app.personal.shortlist[c.c];
                 return (
-                  <tr key={c.c}>
-                    <td>
+                  <tr
+                    key={c.c}
+                    className={pinned.has(c.c) ? 'pinned' : ''}
+                    aria-selected={pinned.has(c.c)}
+                    onClick={(e) => {
+                      // 링크·버튼을 누른 경우는 고정하지 않는다
+                      if ((e.target as HTMLElement).closest('a, button, input, select')) return;
+                      togglePin(c.c);
+                    }}
+                  >
+                    <td className="col-co">
                       <Link href={`/companies/${c.c}`} className="company">
                         {c.n}
                       </Link>{' '}
@@ -206,10 +244,14 @@ export default function CompaniesPage() {
                         {c.s} · {c.m === 'KOSPI' ? '코스피' : '코스닥'} · {c.ig} · 자산 {won(c.a)}
                       </span>
                     </td>
-                    <td>
+                    <td className="col-fin">
+                      <span className="fin-rv">{won(c.rv)}</span>
+                      <span className={`fin-op ${c.op != null && c.op < 0 ? 'neg' : ''}`}>{won(c.op)}</span>
+                    </td>
+                    <td className="col-score">
                       <span className="score">{c.score}</span>
                     </td>
-                    <td className="ev-cell">
+                    <td className="col-ev ev-cell">
                       {top ? (
                         <>
                           <span className="tag">{SIG[top[0]].label}</span>
@@ -221,7 +263,7 @@ export default function CompaniesPage() {
                         <span className="subtle">선택한 신호 없음</span>
                       )}
                     </td>
-                    <td>
+                    <td className="col-svc">
                       <div className="tags">
                         {c.services.map((s) => (
                           <span className="tag" key={s}>
@@ -230,7 +272,7 @@ export default function CompaniesPage() {
                         ))}
                       </div>
                     </td>
-                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                    <td className="col-contact" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                       {c.ph || <span className="subtle">공시에 없음</span>}
                       {c.hp && (
                         <span className="ticker">
@@ -240,8 +282,8 @@ export default function CompaniesPage() {
                         </span>
                       )}
                     </td>
-                    <td>{c.priority && <span className={`tag ${c.priority === '높음' ? 'green' : c.priority === '보통' ? '' : 'amber'}`}>{c.priority}</span>}</td>
-                    <td>
+                    <td className="col-pri">{c.priority && <span className={`tag ${c.priority === '높음' ? 'green' : c.priority === '보통' ? '' : 'amber'}`}>{c.priority}</span>}</td>
+                    <td className="col-act">
                       <div className="row-actions">
                         <Link href={`/companies/${c.c}`} className="small-btn" style={{ textDecoration: 'none', color: 'var(--ink)' }}>
                           상세
@@ -256,7 +298,7 @@ export default function CompaniesPage() {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="empty">
+                  <td colSpan={8} className="empty">
                     조건에 맞는 기업이 없어요. 용역이나 신호를 더 골라 보세요.
                   </td>
                 </tr>
@@ -272,7 +314,7 @@ export default function CompaniesPage() {
           </div>
         )}
         <p className="hint">
-          우선순위: 점수 3 이상 '높음', 2 '보통', 1 '낮음'. {CONFIG.disclaimer}
+          우선순위: 점수 3 이상 '높음', 2 '보통', 1 '낮음'. 점수는 고른 신호 수가 만점이에요. 매출·영업이익은 2025 사업보고서 기준(원화 재무만). 행을 누르면 강조가 고정되고, 다시 누르면 풀려요. {CONFIG.disclaimer}
         </p>
       </div>
     </section>
