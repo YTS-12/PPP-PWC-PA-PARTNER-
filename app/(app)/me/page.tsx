@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
 import { SIZE_LABEL, STATUSES, SVC } from '@/lib/config';
+import { auditorGroupLabel, downloadCsv } from '@/lib/csv';
+import { kstDate } from '@/lib/format';
 import ModeBanner, { useLeaveToLogin } from '@/components/ModeBanner';
 import type { Profile, Status } from '@/lib/types';
 
@@ -25,6 +27,20 @@ export default function MePage() {
   const ids = Object.keys(app.personal.shortlist);
   const visible = ids.filter((id) => statusTab === '전체' || app.personal.shortlist[id].status === statusTab);
   const sf = app.personal.savedFilters;
+
+  // 지금 보이는 상태 탭의 후보만 내보낸다
+  const exportShortlist = () => {
+    const header = ['기업', '종목코드', '시장', '업종', '진행 상태', '저장일', '현재 감사인', '감사인 구분', '대표자', '대표전화', '팩스', '홈페이지', '주소', '내 메모'];
+    downloadCsv(
+      `내후보_${statusTab}_${kstDate()}.csv`,
+      header,
+      visible.map((id) => {
+        const c = byCorp.get(id);
+        const item = app.personal.shortlist[id];
+        return [c?.n || id, c?.s, c?.m, c?.ig, item.status, item.saved_at, c?.au, auditorGroupLabel(c?.ag || ''), c?.ceo, c?.ph, c?.fx, c?.hp, c?.ad, app.personal.memos[id] || ''];
+      }),
+    );
+  };
 
   return (
     <section>
@@ -51,12 +67,17 @@ export default function MePage() {
 
       {tab === 'short' && (
         <div className="card">
-          <div className="tabs">
-            {(['전체', ...STATUSES] as const).map((s) => (
-              <button key={s} className={statusTab === s ? 'on' : ''} onClick={() => setStatusTab(s)}>
-                {s} {s === '전체' ? ids.length : ids.filter((id) => app.personal.shortlist[id].status === s).length}
-              </button>
-            ))}
+          <div className="short-head">
+            <div className="tabs">
+              {(['전체', ...STATUSES] as const).map((s) => (
+                <button key={s} className={statusTab === s ? 'on' : ''} onClick={() => setStatusTab(s)}>
+                  {s} {s === '전체' ? ids.length : ids.filter((id) => app.personal.shortlist[id].status === s).length}
+                </button>
+              ))}
+            </div>
+            <button className="secondary btn-sm" disabled={visible.length === 0} onClick={exportShortlist} title="지금 보이는 상태 탭의 후보만 내보내요">
+              ↓ 후보 CSV 내보내기 ({visible.length})
+            </button>
           </div>
           {visible.length === 0 ? (
             <div className="empty">

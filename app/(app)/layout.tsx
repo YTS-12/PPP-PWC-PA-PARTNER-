@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
 import { leaving, useLeaveToLogin } from '@/components/ModeBanner';
+import Logo from '@/components/Logo';
 
 const NAV = [
   { href: '/dashboard', ico: '▦', label: '대시보드' },
@@ -45,8 +46,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <aside className="sidebar">
-        <Link href="/dashboard" className="brand" style={{ textDecoration: 'none' }}>
-          PA <span>Insight</span>
+        <Link href="/dashboard" className="brand" style={{ textDecoration: 'none' }} aria-label="PwC PA Partner 대시보드">
+          <Logo />
         </Link>
         <div className="workspace">Workspace</div>
         <nav className="nav">
