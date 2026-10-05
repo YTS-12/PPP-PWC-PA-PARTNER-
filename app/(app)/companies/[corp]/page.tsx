@@ -376,6 +376,8 @@ export default function CompanyDetailPage() {
                   <b>{f.t}</b>
                   <div className="subtle" style={{ fontSize: 11, marginTop: 3 }}>
                     {f.cat === 'MNA' && !meta?.extra.major ? '합병·양수 결정' : CAT_LABEL[f.cat]} · {f.d} · 접수번호 {f.r}
+                    {f.rel && <span className="tag amber" style={{ marginLeft: 6 }}>{CONFIG.texts.ic2RelatedTag}</span>}
+                    {f.nosig && <span className="tag gray" style={{ marginLeft: 6 }}>{CONFIG.texts.rs1CapReductionTag}</span>}
                   </div>
                 </div>
                 <a href={dartUrl(f.r)} target="_blank" rel="noreferrer">

@@ -22,6 +22,7 @@ export const CONFIG = raw as unknown as {
   signals: SignalDef[];
   extras: Record<ExtraKey, { label: string; command: string }>;
   strategy: Record<ServiceId | 'SAMIL', string>;
+  texts: Record<string, string>;
   disclaimer: string;
 };
 

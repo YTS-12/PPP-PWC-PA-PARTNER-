@@ -13,10 +13,26 @@
     "sizeMid": 500000000000
   },
   "services": [
-    { "id": "PA", "name": "회계·결산 지원 (PA)", "short": "회계·결산 지원" },
-    { "id": "IC", "name": "내부회계관리제도", "short": "내부회계" },
-    { "id": "IFRS18", "name": "IFRS 18 도입 지원", "short": "IFRS 18" },
-    { "id": "RS", "name": "재무자문·구조조정", "short": "재무자문·구조조정" }
+    {
+      "id": "PA",
+      "name": "회계·결산 지원 (PA)",
+      "short": "회계·결산 지원"
+    },
+    {
+      "id": "IC",
+      "name": "내부회계관리제도",
+      "short": "내부회계"
+    },
+    {
+      "id": "IFRS18",
+      "name": "IFRS 18 도입 지원",
+      "short": "IFRS 18"
+    },
+    {
+      "id": "RS",
+      "name": "재무자문·구조조정",
+      "short": "재무자문·구조조정"
+    }
   ],
   "signals": [
     {
@@ -57,7 +73,7 @@
       "label": "횡령·배임 혐의 발생 공시",
       "source": "공시검색(거래소공시)",
       "needs": "krx",
-      "caution": ""
+      "caution": "거래소공시 제목에 '횡령'·'배임'이 들어간 공시를 근거로 해요. 혐의발생·진행사항·사실확인 공시가 아닌 풍문 조회공시·매매거래정지·고소 접수 같은 관련 공시는 '관련 공시 · 사실 확인 전'으로 따로 표시해요."
     },
     {
       "id": "IC3",
@@ -97,7 +113,7 @@
       "label": "부도·회생·채권은행 관리·감자 공시",
       "source": "공시검색(주요사항보고서)",
       "needs": "major",
-      "caution": ""
+      "caution": "감자결정은 자본잠식 50% 이상(RS3)과 함께일 때만 신호로 봐요. 자기주식 소각 같은 주주환원 목적의 감자를 빼기 위해서예요."
     },
     {
       "id": "RS2",
@@ -117,11 +133,26 @@
     }
   ],
   "extras": {
-    "fin": { "label": "주요계정 재수집 (연결·별도 전체 계정)", "command": "npm run collect:fin" },
-    "auditor2026": { "label": "2026 반기 감사인", "command": "npm run collect:auditor" },
-    "major": { "label": "주요사항보고서 12개월", "command": "npm run collect:major" },
-    "krx": { "label": "거래소공시 12개월 (횡령·배임)", "command": "npm run collect:krx" },
-    "deadline": { "label": "제출기한 연장신고 (3개년)", "command": "npm run collect:deadline" }
+    "fin": {
+      "label": "주요계정 재수집 (연결·별도 전체 계정)",
+      "command": "npm run collect:fin"
+    },
+    "auditor2026": {
+      "label": "2026 반기 감사인",
+      "command": "npm run collect:auditor"
+    },
+    "major": {
+      "label": "주요사항보고서 12개월",
+      "command": "npm run collect:major"
+    },
+    "krx": {
+      "label": "거래소공시 12개월 (횡령·배임)",
+      "command": "npm run collect:krx"
+    },
+    "deadline": {
+      "label": "제출기한 연장신고 (3개년)",
+      "command": "npm run collect:deadline"
+    }
   },
   "strategy": {
     "PA": "결산 일정과 감사 대응 부담을 줄이기 위한 결산 프로세스 진단과 재무제표·주석 작성 지원 범위를 논의해 볼 수 있어요.",
@@ -129,6 +160,14 @@
     "IFRS18": "2027년 시행에 대비한 손익 구분 영향 분석, 2026년 비교정보 재작성, 연결 보고 양식 변경 준비를 제안해 볼 수 있어요.",
     "RS": "유동성·차입 구조를 점검하는 재무구조 진단과 개선 방안 검토를 제안하되, 공시 신호만으로 위기를 단정하지 않아요.",
     "SAMIL": "감사 고객이므로 제안 전 독립성 검토가 먼저예요."
+  },
+  "texts": {
+    "rs1CapReductionNote": "감자결정 공시가 있지만 자본잠식이 50% 미만이라 재무위험 신호(RS1)에는 넣지 않았어요. 자기주식 소각 같은 주주환원 목적일 수 있어요.",
+    "rs1CapReductionNoFinNote": "감자결정 공시가 있지만 주요계정 추가 수집 전이라 자본잠식을 확인할 수 없어 재무위험 신호(RS1)에는 넣지 않았어요.",
+    "rs1CapReductionTag": "신호 제외 · 자본잠식 50% 미만",
+    "ic2RelatedTag": "관련 공시 · 사실 확인 전",
+    "ic2RelatedEvidence": "풍문·조회공시 등 관련 공시, 횡령·배임 사실 확인 전",
+    "ic2RelatedNote": "횡령·배임 근거 공시 중 {n}건은 횡령·배임 사실을 확인한 공시가 아니라 풍문 조회공시·매매거래정지·고소 접수 같은 관련 공시예요. 원문으로 사실 여부를 확인해 주세요."
   },
   "disclaimer": "공시 신호 기반 검토 후보이며 용역 수요를 확정하지 않습니다. 독립성은 사내 절차로 최종 확인하세요."
 }

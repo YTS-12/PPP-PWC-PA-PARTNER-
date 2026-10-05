@@ -33,6 +33,8 @@ export interface RecentItem {
   d: string;
   r: string;
   samil: boolean;
+  /** 횡령·배임 관련 공시(풍문 조회공시 등, 사실 확인 전) */
+  rel?: boolean;
 }
 
 /** data/extra/<이름>.meta.json 한 개(수집 기록). 명령마다 필드가 달라 공통으로 쓰는 것만 적고, 화면에서는 값을 확인한 뒤 쓴다 */
@@ -112,7 +114,8 @@ export interface CompanyDetail {
   fin: { basis: 'CFS' | 'OFS' | null; currency: string | null; assets: number | null; revenue: number | null; op: number | null; rcept: string };
   finx: { CFS: FinRec | null; OFS: FinRec | null } | null;
   hist: [number, string, string][];
-  filings: { cat: 'MNA' | 'DISTRESS' | 'FRAUD' | 'DEADLINE'; t: string; d: string; r: string }[];
+  /** rel: 횡령·배임 관련 공시(사실 확인 전) · nosig: 신호에서 뺀 공시(자본잠식 50% 미만 감자결정) */
+  filings: { cat: 'MNA' | 'DISTRESS' | 'FRAUD' | 'DEADLINE'; t: string; d: string; r: string; rel?: boolean; nosig?: boolean }[];
   h: DetailHit[];
   notes: string[];
 }

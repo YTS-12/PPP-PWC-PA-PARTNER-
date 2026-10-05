@@ -168,6 +168,7 @@ export default function DashboardPage() {
                 </strong>
                 <p>
                   {r.t} · {r.d}
+                  {r.rel && <span style={{ color: 'var(--amber)' }}> · {CONFIG.texts.ic2RelatedTag}</span>}
                   {r.samil && <span style={{ color: 'var(--red)' }}> · 삼일 감사 고객</span>}
                 </p>
               </div>

@@ -24,8 +24,12 @@ const OUT = path.join(ROOT, 'public', 'data');
 const RE_MNA = /회사합병결정|회사분할결정|회사분할합병결정|영업양수결정|타법인주식및출자증권양수결정|주식교환[ㆍ·]?이전결정/;
 const RE_DISTRESS = /부도발생|영업정지|회생절차개시신청|해산사유발생|채권은행등의관리절차개시|감자결정/;
 const RE_FRAUD = /횡령|배임/;
+// 횡령·배임 정식 공시(혐의발생·진행사항·사실확인). 그 밖에 제목에 횡령·배임이 든 공시(풍문 조회공시 등)는 '관련 공시'
+const RE_FRAUD_FORMAL = /^횡령[ㆍ·]?배임/;
+const RE_CAP_REDUCTION = /감자결정/;
+const TX = CONFIG.texts || {};
 const isDeadline = (t) => /연장/.test(t) && /(사업보고서|제출기한)/.test(t);
-const readable = (t) => (t || '').replace(/^(\s*\[[^\]]*\])+/, '').trim();
+const readable = (t) => (t || '').replace(/^(\s*\[[^\]]*\])+/, '').replace(/\s{2,}/g, ' ').trim();
 
 // ---------- 표시 형식 ----------
 function won(n) {
@@ -282,7 +286,8 @@ function main() {
     const recentOnly = (arr) => arr.filter((f) => f.d >= recentFrom).sort((a, b) => b.d.localeCompare(a.d));
     const mna = recentOnly(majorList.filter((f) => RE_MNA.test(baseTitle(f.t))));
     const distress = recentOnly(majorList.filter((f) => RE_DISTRESS.test(baseTitle(f.t))));
-    const fraud = recentOnly((krxBy.get(corp) || []).map((f) => ({ t: f.report_nm, d: isoDate(f.rcept_dt), r: f.rcept_no })).filter((f) => RE_FRAUD.test(f.t)));
+    const fraud = recentOnly((krxBy.get(corp) || []).map((f) => ({ t: f.report_nm, d: isoDate(f.rcept_dt), r: f.rcept_no })).filter((f) => RE_FRAUD.test(f.t)))
+      .map((f) => (RE_FRAUD_FORMAL.test(baseTitle(f.t)) ? f : { ...f, rel: true }));
     // 연장신고 대상 사업연도: 제목의 '(2023.12)' → 2023. 없으면 제출 연도 − 1 (3월 제출 = 직전 사업연도 보고서)
     const fiscalOf = (f) => {
       const m = baseTitle(f.report_nm).match(/\((\d{4})\.\d{1,2}\)/);
@@ -301,8 +306,16 @@ function main() {
     };
     filingHit('PA3', mna);
     filingHit('IC3', mna);
-    if (extra.major) filingHit('RS1', distress);
-    if (extra.krx) filingHit('IC2', fraud);
+    // RS1은 자본잠식(RS3) 판정 뒤에 정한다(감자결정은 자본잠식 50% 이상일 때만 신호)
+    if (extra.krx && fraud.length) {
+      // 대표 근거는 정식 공시(혐의발생·진행사항·사실확인) 중 최신, 없으면 관련 공시 중 최신에 '사실 확인 전'을 붙인다
+      const formal = fraud.filter((f) => !f.rel);
+      const f = formal[0] || fraud[0];
+      const more = fraud.length > 1 ? ` 외 ${fraud.length - 1}건` : '';
+      addHit('IC2', `${readable(f.t)} · ${f.d}${more}${formal.length ? '' : ` (${TX.ic2RelatedEvidence})`}`, f.d, f.r, f.r);
+      const relN = fraud.length - formal.length;
+      if (relN) notes.push(String(TX.ic2RelatedNote || '').replace('{n}', relN));
+    }
     if (extra.deadline && ext.length) {
       const years = [...new Set(ext.map((f) => f.y))].sort();
       // 가장 긴 연속 사업연도 수 (2년 이상이면 표시)
@@ -316,10 +329,8 @@ function main() {
       addHit('PA1', `${years.join('·')} 사업연도 사업보고서 제출기한 연장신고${best >= 2 ? ` (${best}년 연속)` : ''}`, latest.d, latest.r, latest.r);
     }
     for (const f of mna) filings.push({ cat: 'MNA', ...f });
-    for (const f of distress) filings.push({ cat: 'DISTRESS', ...f });
     for (const f of fraud) filings.push({ cat: 'FRAUD', ...f });
     for (const f of ext) filings.push({ cat: 'DEADLINE', t: f.t, d: f.d, r: f.r });
-    for (const f of [...mna, ...distress, ...fraud]) if (f.d >= from3m) recent3m.add(f.r);
 
     // --- IC1 2029 연결 내부회계 감사 대상 ---
     if (fx && (fx.CFS || fx.OFS)) {
@@ -371,6 +382,17 @@ function main() {
       }
     }
 
+    // --- RS1 부도·회생·채권은행 관리·감자 (감자결정은 자본잠식 50% 이상일 때만) ---
+    const impaired = hits.some((h) => h.id === 'RS3');
+    const distressSig = distress.filter((f) => !RE_CAP_REDUCTION.test(baseTitle(f.t)) || impaired);
+    const capOnly = distress.filter((f) => !distressSig.includes(f));
+    if (extra.major) filingHit('RS1', distressSig);
+    if (capOnly.length) notes.push(extra.fin ? TX.rs1CapReductionNote : TX.rs1CapReductionNoFinNote);
+    for (const f of distressSig) filings.push({ cat: 'DISTRESS', ...f });
+    for (const f of capOnly) filings.push({ cat: 'DISTRESS', ...f, nosig: true });
+    // 최근 신호 공시 = 신호 근거가 되는 공시만(신호에서 뺀 감자결정은 제외)
+    for (const f of [...mna, ...distressSig, ...fraud]) if (f.d >= from3m) recent3m.add(f.r);
+
     const sz = krwAssets == null ? 'U' : krwAssets >= P.sizeLarge ? 'L' : krwAssets >= P.sizeMid ? 'M' : 'S';
     const ct = c.contacts || {};
     const ig = industryGroup(c.industry_code);
@@ -392,8 +414,9 @@ function main() {
       h: hits.map((h) => [h.id, h.ev, h.d, h.k, h.r]),
     });
 
-    for (const f of [...mna, ...distress, ...fraud]) {
-      recent.push({ c: corp, n: name, cat: mna.includes(f) ? 'MNA' : distress.includes(f) ? 'DISTRESS' : 'FRAUD', t: readable(f.t), d: f.d, r: f.r, samil: ag === 'SAMIL' });
+    for (const f of [...mna, ...distressSig, ...fraud]) {
+      const cat = mna.includes(f) ? 'MNA' : distressSig.includes(f) ? 'DISTRESS' : 'FRAUD';
+      recent.push({ c: corp, n: name, cat, t: readable(f.t), d: f.d, r: f.r, samil: ag === 'SAMIL', ...(f.rel ? { rel: true } : {}) });
     }
 
     details[corp] = {
