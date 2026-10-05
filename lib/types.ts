@@ -16,6 +16,8 @@ export interface CompanySummary {
   au: string; // 현재 감사인
   ag: AuditorGroup;
   a: number | null; // 자산총계(원)
+  rv?: number | null; // 매출액(원, 원화 재무만)
+  op?: number | null; // 영업이익(원, 원화 재무만)
   sz: SizeBand;
   ceo: string;
   ph: string;

@@ -405,6 +405,8 @@ function main() {
       au: currentAuditor,
       ag,
       a: krwAssets,
+      rv: cur === 'KRW' ? revenueBase : null,
+      op: cur === 'KRW' ? opBase : null,
       sz,
       ceo: c.ceo || '',
       ph: ct.phone || '',

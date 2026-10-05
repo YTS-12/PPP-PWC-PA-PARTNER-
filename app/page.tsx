@@ -2,6 +2,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
+import Logo from '@/components/Logo';
 
 const NEXT_ALLOWED = ['/dashboard', '/companies', '/me'];
 
@@ -57,13 +58,13 @@ export default function LoginPage() {
       <div className="login-side">
         <div>
           <div className="brand">
-            PA <span>Insight</span>
+            <Logo size="lg" />
           </div>
           <div style={{ marginTop: 56 }}>
             <h1>
               공시로 찾는
               <br />
-              다음 제안 후보
+              클라이언트 후보
             </h1>
             <p>
               DART 공시에서 확인되는 신호로 회계·결산 지원, 내부회계관리제도, IFRS 18 도입 지원, 재무자문·구조조정 후보를 먼저 추려 드려요.
