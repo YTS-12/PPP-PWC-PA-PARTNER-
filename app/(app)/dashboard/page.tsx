@@ -9,7 +9,7 @@ import ModeBanner from '@/components/ModeBanner';
 import { kstDate } from '@/lib/format';
 import type { ExtraKey, ExtraMetaRecord, SummaryMeta } from '@/lib/types';
 
-const CAT_LABEL = { MNA: '합병·분할·양수', DISTRESS: '부도·회생·감자', FRAUD: '횡령·배임' } as const;
+const CAT_LABEL = { MNA: '합병·분할·양수', DISTRESS: '부도·회생·감자·영업정지', FRAUD: '횡령·배임' } as const;
 
 /**
  * 데이터 상태 칩용 수집 기록 요약. meta.extraMeta 는 data/extra/<이름>.meta.json 을 그대로 모은 것이라
@@ -93,6 +93,10 @@ export default function DashboardPage() {
     .filter(Boolean)
     .join(' · ');
   const isUser = app.mode === 'user';
+  // 최근 3개월 신호 공시: 삼일 감사 고객을 숨기면 그 회사 공시를 뺀 수(recent3mNoSamil). 예전 데이터라 값이 없으면 전체 수를 쓰고 '포함'으로 적는다
+  const recentNoSamil = typeof meta.recent3mNoSamil === 'number' ? meta.recent3mNoSamil : null;
+  const recentExclSamil = app.filters.hideSamil && recentNoSamil !== null;
+  const recentCount = recentExclSamil ? recentNoSamil : meta.recent3m;
 
   return (
     <section>
@@ -129,8 +133,10 @@ export default function DashboardPage() {
         </div>
         <div className="card">
           <div className="kpi-label">최근 3개월 신호 공시</div>
-          <div className="kpi-value">{meta.recent3m}</div>
-          <div className="kpi-note">{recentKinds}</div>
+          <div className="kpi-value">{recentCount}</div>
+          <div className="kpi-note">
+            {recentKinds} · 삼일 감사 고객 {recentExclSamil ? '제외' : '포함'}
+          </div>
         </div>
       </div>
 
@@ -151,7 +157,7 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-          <p className="hint">한 기업이 여러 용역에 걸릴 수 있어요. 추가 수집 전인 신호는 계산에서 빠져요.</p>
+          <p className="hint">한 기업이 여러 용역에 걸릴 수 있어요.{pendingSignals.length > 0 && ' 추가 수집 전인 신호는 계산에서 빠져요.'}</p>
         </div>
         <div className="card">
           <div className="section-head">
@@ -168,6 +174,11 @@ export default function DashboardPage() {
                 </strong>
                 <p>
                   {r.t} · {r.d}
+                  {r.corr && (
+                    <span className="tag gray" style={{ marginLeft: 6, padding: '2px 6px' }}>
+                      {CONFIG.texts.corrTag}
+                    </span>
+                  )}
                   {r.rel && <span style={{ color: 'var(--amber)' }}> · {CONFIG.texts.ic2RelatedTag}</span>}
                   {r.samil && <span style={{ color: 'var(--red)' }}> · 삼일 감사 고객</span>}
                 </p>
@@ -182,7 +193,7 @@ export default function DashboardPage() {
           <h2>데이터 상태</h2>
           <span className="pill">기준일 {meta.dataAsOf}</span>
         </div>
-        <div className="tags" style={{ gap: 8 }}>
+        <div className="tags status-tags" style={{ gap: 8 }}>
           <span className="tag green">기존 수집본 · {meta.universe.toLocaleString()}곳 · {meta.fiscalYear} 사업보고서</span>
           {extras.map(([k, v]) => {
             if (!meta.extra[k]) {

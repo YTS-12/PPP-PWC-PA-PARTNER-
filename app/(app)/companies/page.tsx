@@ -3,8 +3,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
-import { applyFilters, type Scored } from '@/lib/scoring';
-import { CONFIG, INDUSTRY_GROUPS, SERVICES, SIGNALS, SIG, SIZE_LABEL, SVC, defaultFilters, signalAvailable } from '@/lib/config';
+import { applyFilters, leadHit, type Scored } from '@/lib/scoring';
+import { CONFIG, INDUSTRY_GROUPS, SERVICES, SIGNALS, SIG, SIZE_LABEL, SVC, auditorGroupText, auditorTag, cautionOf, defaultFilters, signalAvailable } from '@/lib/config';
 import { siteUrl, won } from '@/lib/format';
 import ModeBanner from '@/components/ModeBanner';
 import type { Filters, ServiceId } from '@/lib/types';
@@ -31,7 +31,7 @@ function exportCsv(rows: Scored[], asOf: string) {
         c.hits.map((h) => SIG[h[0]].label).join(' / '),
         c.services.map((s) => SVC[s].name).join(' / '),
         c.au,
-        c.ag === 'SAMIL' ? '삼일' : c.ag === 'BIG4' ? '타 대형법인' : c.ag === 'OTHER' ? '기타 법인' : '',
+        auditorGroupText(c.ag, c.ae),
         c.a ?? '',
         c.ceo,
         c.ph,
@@ -43,6 +43,8 @@ function exportCsv(rows: Scored[], asOf: string) {
         .join(','),
     );
   }
+  // 맨 끝에 빈 줄을 두고 기준일·면책 문구를 첫 칸에만 넣는다(열 구조 유지)
+  lines.push('', csvCell(`데이터 기준일 ${asOf}`), csvCell(CONFIG.disclaimer));
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -106,7 +108,7 @@ export default function CompaniesPage() {
               {SIGNALS.filter((g) => g.service === s.id).map((g) => {
                 const ok = signalAvailable(g.id, extra);
                 return (
-                  <label key={g.id} className={`crit ${ok ? '' : 'off'}`} title={ok ? g.caution : `추가 수집 전 · ${extra && g.needs ? CONFIG.extras[g.needs].command : ''}`}>
+                  <label key={g.id} className={`crit ${ok ? '' : 'off'}`} title={ok ? cautionOf(g.id, extra) : `추가 수집 전 · ${extra && g.needs ? CONFIG.extras[g.needs].command : ''}`}>
                     <input type="checkbox" disabled={!ok} checked={ok && f.signals.includes(g.id)} onChange={() => toggleSignal(g.id)} />
                     <span>
                       {g.label}
@@ -188,7 +190,8 @@ export default function CompaniesPage() {
             </thead>
             <tbody>
               {rows.slice(0, limit).map((c) => {
-                const top = c.hits[0];
+                const top = leadHit(c.hits);
+                const at = auditorTag(c.ag, c.ae);
                 const saved = !!app.personal.shortlist[c.c];
                 return (
                   <tr key={c.c}>
@@ -196,7 +199,9 @@ export default function CompaniesPage() {
                       <Link href={`/companies/${c.c}`} className="company">
                         {c.n}
                       </Link>{' '}
-                      {c.ag === 'SAMIL' ? <span className="tag red">삼일 감사 고객</span> : c.ag ? <span className="tag gray">타 법인 감사 고객</span> : null}
+                      <span className={`tag ${at.cls}`} title={at.title || undefined}>
+                        {at.text}
+                      </span>
                       <span className="ticker">
                         {c.s} · {c.m === 'KOSPI' ? '코스피' : '코스닥'} · {c.ig} · 자산 {won(c.a)}
                       </span>

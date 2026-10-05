@@ -1,4 +1,10 @@
 {
   "regions": ["icn1"],
-  "crons": [{ "path": "/api/keepalive", "schedule": "0 0 * * *" }]
+  "crons": [{ "path": "/api/keepalive", "schedule": "0 0 * * *" }],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    }
+  ]
 }

@@ -1,6 +1,6 @@
 import raw from '@/config/signals.json';
 import { won } from './format';
-import type { ExtraKey, Filters, ServiceId } from './types';
+import type { AuditorGroup, ExtraKey, Filters, ServiceId } from './types';
 
 export interface SignalDef {
   id: string;
@@ -8,7 +8,11 @@ export interface SignalDef {
   label: string;
   source: string;
   needs: ExtraKey | null;
+  /** 늘 보이는 주의 문구(추가 수집 뒤에도 맞는 문장만) */
   caution: string;
+  /** pendingKey 추가 수집 전(meta.extra[pendingKey]가 false)일 때만 caution 뒤에 붙이는 문구 */
+  cautionPending?: string;
+  pendingKey?: ExtraKey | null;
 }
 export interface ServiceDef {
   id: ServiceId;
@@ -72,6 +76,36 @@ export function signalAvailable(id: string, extra: Record<ExtraKey, boolean> | u
   if (!s) return false;
   if (!s.needs) return true;
   return Boolean(extra && extra[s.needs]);
+}
+
+/**
+ * 신호 주의 문구. caution은 늘 보이고, cautionPending은 pendingKey 추가 수집 전일 때만 뒤에 붙인다.
+ * summary를 못 받아 extra가 없으면 signalAvailable처럼 추가 수집 전으로 본다
+ */
+export function cautionOf(id: string, extra: Record<ExtraKey, boolean> | undefined): string {
+  const s = SIG[id];
+  if (!s) return '';
+  const pending = s.cautionPending && s.pendingKey && !(extra && extra[s.pendingKey]) ? s.cautionPending : '';
+  return [s.caution, pending].filter(Boolean).join(' ');
+}
+
+/**
+ * 목록·내 후보의 독립성 태그. ae(이력으로 추정한 연도)가 있으면 '(추정)'을 붙인다.
+ * ag가 비어 있는 예전 데이터도 감사인 미확인으로 본다
+ */
+export function auditorTag(ag: AuditorGroup | '' | undefined, ae?: number | null): { cls: string; text: string; title: string } {
+  const est = ae ? '(추정)' : '';
+  const estTitle = ae ? `${ae} 사업보고서 감사인으로 추정 · 독립성 직접 확인` : '';
+  if (ag === 'SAMIL') return { cls: 'red', text: `삼일 감사 고객${est}`, title: estTitle };
+  if (ag === 'BIG4' || ag === 'OTHER') return { cls: 'gray', text: `타 법인 감사 고객${est}`, title: estTitle };
+  return { cls: 'amber', text: '감사인 미확인', title: CONFIG.texts.unknownAuditorTag || '' };
+}
+
+/** CSV '감사인 구분' 값. 감사인 미확인은 '미확인', 이력 추정은 '…(추정)' */
+export function auditorGroupText(ag: AuditorGroup | '' | undefined, ae?: number | null): string {
+  const base = ag === 'SAMIL' ? '삼일' : ag === 'BIG4' ? '타 대형법인' : ag === 'OTHER' ? '기타 법인' : '';
+  if (!base) return '미확인';
+  return ae ? `${base}(추정)` : base;
 }
 
 export function defaultFilters(): Filters {

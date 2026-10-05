@@ -4,12 +4,21 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
 import { loadDetail, useSummary } from '@/lib/data';
-import { CONFIG, SIG, STATUSES } from '@/lib/config';
+import { CONFIG, SIG, STATUSES, cautionOf } from '@/lib/config';
 import { dartUrl, pct, siteUrl, withCurrency } from '@/lib/format';
 import { scoreDetailHits } from '@/lib/scoring';
-import type { CompanyDetail, DetailHit, FinRec, Status } from '@/lib/types';
+import type { CompanyDetail, DetailHit, FilingItem, FinRec, Status } from '@/lib/types';
 
-const CAT_LABEL = { MNA: '합병·분할·양수 결정', DISTRESS: '부도·회생·감자', FRAUD: '횡령·배임', DEADLINE: '제출기한 연장신고' } as const;
+const CAT_LABEL = { MNA: '합병·분할·양수 결정', DISTRESS: '부도·회생·감자·영업정지', FRAUD: '횡령·배임', DEADLINE: '제출기한 연장신고' } as const;
+
+/** 신호에서 뺀 공시의 태그 문구. 예전 데이터의 nosig:true는 'cap'(자본잠식 50% 미만 감자)으로 읽는다 */
+function nosigTag(nosig: FilingItem['nosig'] | boolean | undefined): string {
+  const reason = nosig === true ? 'cap' : nosig;
+  if (reason === 'cap') return CONFIG.texts.rs1CapReductionTag;
+  if (reason === 'capUnknown') return CONFIG.texts.rs1CapUnknownTag || CONFIG.texts.rs1CapReductionTag;
+  if (reason === 'susp') return CONFIG.texts.rs1SuspTag || '신호 제외';
+  return '';
+}
 
 function copyText(text: string, done: () => void, fail: () => void) {
   if (navigator.clipboard?.writeText) {
@@ -69,7 +78,10 @@ export default function CompanyDetailPage() {
   const main: FinRec | null = fx ? fx.CFS || fx.OFS : null;
   const foreign = !!main?.currency && main.currency !== 'KRW';
   const noFin = meta?.extra.fin ? '주요계정 없음' : '추가 수집 후 표시';
-  const debtRatio = main && main.liabilities != null && main.equity ? main.liabilities / main.equity : null;
+  // 자본총계가 0 이하(완전 자본잠식)면 부채비율은 뜻이 없어 '자본잠식'으로 보인다
+  const eqNonPos = main?.equity != null && main.equity <= 0;
+  const debtRatio = main && main.liabilities != null && main.equity != null && main.equity > 0 ? main.liabilities / main.equity : null;
+  const debtSrc = eqNonPos ? '자본총계 0 이하 · 계산 불가' : main ? `부채총계 ÷ 자본총계${debtRatio == null ? ' · 계산 불가' : ''}` : noFin;
   const nonop = main && main.pretax != null && main.op != null ? main.pretax - main.op : null;
   const nonopRatio = nonop != null && main && main.op ? Math.abs(nonop) / Math.abs(main.op) : null;
   const ratioText = nonopRatio != null ? `영업이익의 ${pct(nonopRatio)}` : '';
@@ -77,6 +89,12 @@ export default function CompanyDetailPage() {
     ? ['외화 재무 · 규모 신호 제외', ratioText].filter(Boolean).join(' · ')
     : ratioText || (main ? '계산 불가' : noFin);
   const samil = d.ag === 'SAMIL';
+  // 감사인 미확인: 현재 감사인도 이력도 못 찾음(예전 데이터의 빈 ag 포함)
+  const unknownAu = d.ag === 'UNKNOWN' || !d.ag;
+  // 이력 추정: 현재 감사인을 못 찾아 ae 연도 사업보고서 감사인으로 정함
+  const est = !unknownAu && !!d.ae;
+  const estNote = est ? (CONFIG.texts.estAuditorNote || '').replace('{year}', String(d.ae)).replace('{au}', d.au || '-') : '';
+  const auSrcText = est ? `추정 · ${d.auSrc.replace(/\(추정\)$/, '')}` : d.auSrc;
   const isUser = app.mode === 'user';
 
   const contactText = [
@@ -101,7 +119,13 @@ export default function CompanyDetailPage() {
       `- 해당 신호 ${score}개${sc.total !== score ? ` (현재 조건 기준 · 전체 ${sc.total}개)` : ''}: ${sigText || '없음'}`,
       `- 검토 용역: ${services.map((s) => CONFIG.services.find((x) => x.id === s)!.name).join(', ') || '-'}`,
       `- 회사 대표 연락처: ${d.contact.phone || '-'} / ${d.contact.homepage || '-'} (DART 기업개황)`,
-      `- 독립성: ${samil ? '현재 감사인 삼일 → 사내 독립성 검토 필요' : `현재 감사인 ${d.au || '미확인'} (사내 절차로 최종 확인)`}`,
+      `- 독립성: ${
+        samil
+          ? `현재 감사인 삼일${est ? `(${d.ae} 사업보고서 이력 기준 추정)` : ''} → 사내 독립성 검토 필요`
+          : unknownAu
+            ? '감사인 미확인 → 독립성 직접 확인 필요'
+            : `현재 감사인 ${d.au}${est ? `(${d.ae} 사업보고서 이력 기준 추정)` : ''} (사내 절차로 최종 확인)`
+      }`,
       '- 비고: 공시 신호 기반 검토 후보이며 용역 수요를 확정하지 않음',
     ];
     if (p.memo_sign || p.display_name) lines.push(`- ${p.memo_sign || p.display_name}${p.team ? ' / ' + p.team : ''}`);
@@ -118,7 +142,7 @@ export default function CompanyDetailPage() {
           </p>
           <h1 style={{ marginTop: 12 }}>{d.n} · 기업 분석</h1>
           <p>
-            {d.m === 'KOSPI' ? '코스피' : '코스닥'} · {d.ig} · 현재 감사인 {d.au || '미확인'}({d.auSrc}) · 데이터 기준일 {meta?.dataAsOf || '-'}
+            {d.m === 'KOSPI' ? '코스피' : '코스닥'} · {d.ig} · 현재 감사인 {d.au || '미확인'}({auSrcText}) · 데이터 기준일 {meta?.dataAsOf || '-'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -139,6 +163,26 @@ export default function CompanyDetailPage() {
         <div className="banner indep">
           <span>
             <b>삼일 감사 고객</b> · 현재 감사인이 삼일회계법인이에요. 재무제표 작성 지원·재무정보체제 구축 등 비감사업무는 법적으로 제한될 수 있으니, 제안 전 사내 독립성 검토가 필요해요.
+            {est && (
+              <>
+                <br />
+                <b>이력 기준 추정</b> · {estNote}
+              </>
+            )}
+          </span>
+        </div>
+      )}
+      {unknownAu && (
+        <div className="banner indep-warn">
+          <span>
+            <b>{CONFIG.texts.unknownAuditorTag}</b> · 현재 감사인과 감사인 이력을 공시에서 확인하지 못했어요. 삼일 감사 고객일 수 있으니 제안 전 사내 절차로 독립성을 직접 확인하세요.
+          </span>
+        </div>
+      )}
+      {est && !samil && (
+        <div className="banner indep-warn">
+          <span>
+            <b>감사인 추정</b> · {estNote}
           </span>
         </div>
       )}
@@ -147,13 +191,17 @@ export default function CompanyDetailPage() {
         <div className="company-head">
           <div>
             <span className="tag">{d.ig}</span> <span className="tag gray">{d.m === 'KOSPI' ? '코스피' : '코스닥'}</span>{' '}
-            {!samil && d.ag && <span className="tag gray">타 법인 감사 고객</span>}
+            {unknownAu ? (
+              <span className="tag amber">{CONFIG.texts.unknownAuditorTag}</span>
+            ) : (
+              !samil && <span className="tag gray">타 법인 감사 고객{est ? '(추정)' : ''}</span>
+            )}
             <h2>{d.n}</h2>
             <div className="subtle">
               {d.s} · {d.dartName} · 상장 {d.listed || '-'} · 결산월 {d.accMt || '-'}월
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
+          <div className="score-box">
             <div className="subtle" style={{ fontSize: 12 }}>
               현재 조건 해당 신호
             </div>
@@ -176,8 +224,8 @@ export default function CompanyDetailPage() {
           </div>
           <div className="metric">
             <div className="label">부채비율</div>
-            <div className="num">{debtRatio != null ? pct(debtRatio) : '–'}</div>
-            <div className="src">{main ? '부채총계 ÷ 자본총계' : noFin}</div>
+            <div className="num">{eqNonPos ? '자본잠식' : debtRatio != null ? pct(debtRatio) : '–'}</div>
+            <div className="src">{debtSrc}</div>
           </div>
           <div className="metric">
             <div className="label">영업이익 {main ? '(당기·전기·전전기)' : '(2025)'}</div>
@@ -204,6 +252,8 @@ export default function CompanyDetailPage() {
           {d.h.map((h) => {
             const g = SIG[h.id];
             const out = !sc.active.has(h.id);
+            // caution은 늘, cautionPending은 해당 추가 수집 전일 때만
+            const caution = cautionOf(h.id, meta?.extra);
             return (
               <div className="reason" key={h.id} style={out ? { opacity: 0.5 } : undefined}>
                 <div className="reason-icon">{g.service === 'RS' ? '!' : h.r && h.d ? '◈' : '↗'}</div>
@@ -228,7 +278,7 @@ export default function CompanyDetailPage() {
                       </>
                     )}
                   </p>
-                  {g.caution && <div className="caution">{g.caution}</div>}
+                  {caution && <div className="caution">{caution}</div>}
                 </div>
               </div>
             );
@@ -377,7 +427,16 @@ export default function CompanyDetailPage() {
                   <div className="subtle" style={{ fontSize: 11, marginTop: 3 }}>
                     {f.cat === 'MNA' && !meta?.extra.major ? '합병·양수 결정' : CAT_LABEL[f.cat]} · {f.d} · 접수번호 {f.r}
                     {f.rel && <span className="tag amber" style={{ marginLeft: 6 }}>{CONFIG.texts.ic2RelatedTag}</span>}
-                    {f.nosig && <span className="tag gray" style={{ marginLeft: 6 }}>{CONFIG.texts.rs1CapReductionTag}</span>}
+                    {f.corr && (
+                      <span className="tag gray" style={{ marginLeft: 6 }}>
+                        {CONFIG.texts.corrTag}
+                      </span>
+                    )}
+                    {f.nosig && (
+                      <span className="tag gray" style={{ marginLeft: 6 }}>
+                        {nosigTag(f.nosig)}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <a href={dartUrl(f.r)} target="_blank" rel="noreferrer">

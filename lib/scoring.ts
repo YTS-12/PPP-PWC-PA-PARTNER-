@@ -17,9 +17,26 @@ export function priorityOf(score: number): Scored['priority'] {
   return '';
 }
 
-/** 서로 다른 근거 키 개수 = 점수 (같은 공시로 걸린 PA3·IC3은 1개로 센다) */
+/** 서로 다른 근거 키 개수 = 점수 (같은 공시로 걸린 PA3·IC3, 같은 자산 규모로 걸린 IC1·IF3은 1개로 센다) */
 export function scoreOf(hits: Hit[]): number {
   return new Set(hits.map((h) => h[3])).size;
+}
+
+// 목록 '주요 근거' 열의 대표 근거 고르는 순서. 사건 신호(근거일 최신 우선, 같은 날이면 이 순서) → PA2 → 구조 신호
+const EVENT_SIGNALS = ['RS1', 'RS2', 'RS3', 'IC2', 'PA1', 'PA3', 'IC3'];
+const STRUCT_SIGNALS = ['PA2', 'IC1', 'IF1', 'IF2', 'IF3'];
+
+/** 대표 근거 한 건. hits는 현재 조건 안의 근거(Scored.hits) */
+export function leadHit(hits: Hit[]): Hit | undefined {
+  const events = hits.filter((h) => EVENT_SIGNALS.includes(h[0]));
+  if (events.length) {
+    return [...events].sort((a, b) => b[2].localeCompare(a[2]) || EVENT_SIGNALS.indexOf(a[0]) - EVENT_SIGNALS.indexOf(b[0]))[0];
+  }
+  for (const id of STRUCT_SIGNALS) {
+    const h = hits.find((x) => x[0] === id);
+    if (h) return h;
+  }
+  return hits[0];
 }
 
 export function activeSignals(f: Filters, extra?: Record<ExtraKey, boolean>): Set<string> {
@@ -59,6 +76,7 @@ export function applyFilters(
     if (f.market !== 'all' && c.m !== f.market) continue;
     if (f.size !== 'all' && c.sz !== f.size) continue;
     if (f.industry !== 'all' && c.ig !== f.industry) continue;
+    // 이력으로 추정한 삼일(ae 있음)도 ag가 SAMIL이라 같이 숨긴다. 감사인 미확인(UNKNOWN)은 숨기지 않고 태그로 알린다
     if (!opts.ignoreSamil && f.hideSamil && c.ag === 'SAMIL') continue;
     if (q && !(c.n.toLowerCase().includes(q) || c.s.toLowerCase().includes(q))) continue;
     const hits = c.h.filter((h) => active.has(h[0]));

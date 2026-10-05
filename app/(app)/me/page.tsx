@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
-import { SIZE_LABEL, STATUSES, SVC } from '@/lib/config';
+import { SIZE_LABEL, STATUSES, SVC, auditorTag } from '@/lib/config';
 import ModeBanner, { useLeaveToLogin } from '@/components/ModeBanner';
 import type { Profile, Status } from '@/lib/types';
 
@@ -82,13 +82,19 @@ export default function MePage() {
                   {visible.map((id) => {
                     const c = byCorp.get(id);
                     const item = app.personal.shortlist[id];
+                    // 목록과 같은 독립성 태그(삼일·타 법인·감사인 미확인, 이력 추정이면 '(추정)')
+                    const at = c ? auditorTag(c.ag, c.ae) : null;
                     return (
                       <tr key={id}>
                         <td>
                           <Link href={`/companies/${id}`} className="company">
                             {c?.n || id}
                           </Link>{' '}
-                          {c?.ag === 'SAMIL' && <span className="tag red">삼일 감사 고객</span>}
+                          {at && (
+                            <span className={`tag ${at.cls}`} title={at.title || undefined}>
+                              {at.text}
+                            </span>
+                          )}
                           <span className="ticker">{c ? `${c.s} · ${c.m === 'KOSPI' ? '코스피' : '코스닥'} · ${c.ig}` : ''}</span>
                         </td>
                         <td>

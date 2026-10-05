@@ -44,7 +44,7 @@ export default function ModeBanner({ userText }: { userText?: string }) {
   return (
     <div className="banner guest">
       <span>
-        <b>게스트 모드</b> · 모든 추천 기능을 그대로 쓸 수 있어요. 다만 조건·후보·메모는 이 화면을 떠나면 사라져요.
+        <b>게스트 모드</b> · 모든 추천 기능을 그대로 쓸 수 있어요. 다만 조건·후보·메모는 새로고침하거나 창을 닫으면 사라져요.
       </span>
       <button className="secondary" onClick={leave}>
         로그인하고 저장하기

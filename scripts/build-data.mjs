@@ -27,9 +27,16 @@ const RE_FRAUD = /횡령|배임/;
 // 횡령·배임 정식 공시(혐의발생·진행사항·사실확인). 그 밖에 제목에 횡령·배임이 든 공시(풍문 조회공시 등)는 '관련 공시'
 const RE_FRAUD_FORMAL = /^횡령[ㆍ·]?배임/;
 const RE_CAP_REDUCTION = /감자결정/;
+// 영업정지: 인허가 행정처분인 경우가 많아 감사의견 비적정(RS2)·자본잠식 50% 이상(RS3)과 같은 회사일 때만 RS1
+const RE_SUSPENSION = /영업정지/;
 const TX = CONFIG.texts || {};
 const isDeadline = (t) => /연장/.test(t) && /(사업보고서|제출기한)/.test(t);
 const readable = (t) => (t || '').replace(/^(\s*\[[^\]]*\])+/, '').replace(/\s{2,}/g, ' ').trim();
+// 정정공시: 맨 앞 대괄호 머리말 중 '정정'이 든 것([기재정정]·[첨부정정]·[정정명령부과][첨부정정] 등). [첨부추가]·[연장결정]은 아니다.
+// 최종 보고서만 받으므로 근거일이 정정 접수일일 수 있어 근거 문구 끝에 '(정정공시)'를 붙이고 목록에 corr 표시를 남긴다
+const isCorrection = (t) => /정정/.test(((t || '').match(/^(\s*\[[^\]]*\])+/) || [''])[0]);
+const corrSuffix = (t) => (isCorrection(t) ? ` (${TX.corrEvidence})` : '');
+const corrFlag = (t) => (isCorrection(t) ? { corr: true } : {});
 
 // ---------- 표시 형식 ----------
 function won(n) {
@@ -50,6 +57,8 @@ function won(n) {
   return `${sign}${v.toLocaleString('ko-KR')}`;
 }
 const pct = (x) => `${Math.round(x * 100)}%`;
+// 기준 미만임을 보여 줄 때는 내림한다(49.6%를 '50%'로 적으면 '50% 미만'과 어긋남)
+const pctFloor = (x) => (x < 0.01 ? '1% 미만' : `${Math.floor(x * 100)}%`);
 
 // ---------- 감사인 ----------
 // 감사인 이름처럼 보이는지 (auditor-2026h1.mjs의 looksLikeAuditor와 같은 결과): 공백을 지운 뒤
@@ -63,10 +72,36 @@ const looksLikeAuditor = (s) => {
 };
 
 /**
- * 감사인 비교용 이름 (PA2 연속 판정·감사인 그룹 공용). 화면에 보이는 원문(au, hist)은 바꾸지 않는다.
+ * 화면용 감사인명 (summary·detail의 au, PA2 근거 문구). 원문은 detail hist에만 그대로 둔다.
+ * 표 칸 안 줄바꿈(한글 사이)은 붙이고 나머지 공백은 한 칸으로 줄인다. 각주 '(*)'·'(*1)'·'(주1)'·'*'와
+ * '대표이사 …'·'대표공인회계사 …' 이하를 지운다. '(주)'·'(PwC)'·'(지정감사인)'·'(구, …)' 같은 괄호는 남긴다.
+ * 예: '삼정\n회계법인' → '삼정회계법인', '우리회계법인\n(주1)' → '우리회계법인', '삼일회계법인 대표이사 윤 훈 수' → '삼일회계법인'
+ */
+function displayAuditor(a) {
+  return String(a ?? '')
+    .replace(/([가-힣])[ \t]*[\r\n]+[ \t]*(?=[가-힣])/g, '$1')
+    .replace(/\s*(대표이사|대표공인회계사)[\s\S]*$/, '')
+    .replace(/\(\s*\*?\s*(?:주\s*)?\d*\s*\)+/g, (m) => (/[*\d]/.test(m) ? '' : m))
+    .replace(/\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// 정규화 뒤 이름의 오타 (정확히 같은 이름만 고친다). 원문 예: '삼회회계법인'·'정신세림회계법인'·'정진세람 회계법인'·'삼덛회계법인'·'심한회계법인'
+const AUDITOR_TYPO = new Map([
+  ['삼회', '삼화'],
+  ['정신세림', '정진세림'],
+  ['정진세람', '정진세림'],
+  ['삼덛', '삼덕'],
+  ['심한', '신한'],
+]);
+
+/**
+ * 감사인 비교용 이름 (PA2 연속 판정·감사인 그룹 공용). 화면에 보이는 이름(au)은 displayAuditor, 원문(hist)은 그대로.
  * 괄호와 그 안(겹괄호 포함)·주식회사·㈜·'대표이사 …'·공백·기호를 지우고, 오타(회게법인·화계법인 등)를 고친 뒤
  * 대형 4곳은 '삼일'·'삼정'·'안진'·'한영'으로 통일, 나머지는 맨 앞 영문 접두(EY·딜로이트·Deloitte·KPMG·PwC)와
- * 앞뒤의 '회계법인'을 뗀다. 예: 'EY한영회계법인'·'한영 회계법인' → '한영', '회계법인 세일원'·'세일원 회계법인' → '세일원'
+ * 앞뒤의 '회계법인'을 뗀 뒤 오타 표(AUDITOR_TYPO)와 정확히 같으면 고친다.
+ * 예: 'EY한영회계법인'·'한영 회계법인' → '한영', '회계법인 세일원'·'세일원 회계법인' → '세일원', '삼회회계법인' → '삼화'
  * 같은 이름 반복을 지운 뒤에도 '회계법인'이 두 번 이상이면 서로 다른 법인 두 곳을 함께 적은 것으로 보고
  * 통일하지 않은 정리된 전체를 돌려준다. 예: '대주회계법인 삼일회계법인' → '대주회계법인삼일회계법인'
  * (감사인 그룹은 includes 기준이라 삼일이 들어 있으면 그대로 SAMIL)
@@ -94,7 +129,7 @@ function normAuditor(a) {
     .replace(/^(EY|딜로이트|Deloitte|KPMG|PwC)+/i, '')
     .replace(/^회계법인/, '')
     .replace(/회계(법인)?$/, ''); // '우리회계'
-  return core || s;
+  return AUDITOR_TYPO.get(core) || core || s;
 }
 function auditorGroup(norm) {
   if (!norm) return '';
@@ -126,9 +161,11 @@ function industryGroup(code) {
 }
 function finOrHolding(code, name) {
   const c = (code || '').trim();
+  const holdingName = /홀딩스|지주/.test(name);
   if (c.startsWith('715') || c.startsWith('64992')) return '지주회사';
-  if (/^6[456]/.test(c)) return '금융업';
-  if (/홀딩스|지주/.test(name)) return '지주회사(회사명 기준)';
+  // 업종이 기타 금융업(649 등)으로 잡힌 지주회사(오리온홀딩스·미원홀딩스 등)는 금융업이 아니라 지주회사로 표시한다(판정은 같은 IF2)
+  if (/^6[456]/.test(c)) return holdingName ? '지주회사(회사명·업종 기타금융)' : '금융업';
+  if (holdingName) return '지주회사(회사명 기준)';
   return null;
 }
 
@@ -206,7 +243,8 @@ function main() {
   const recent = [];
   const counts = Object.fromEntries(CONFIG.signals.map((s) => [s.id, 0]));
   const excluded = { spac: 0, reitFund: 0 };
-  let recent3m = new Set();
+  const recent3m = new Set();
+  const recent3mNoSamil = new Set();
 
   for (const c of base.companies) {
     const name = c.name;
@@ -241,7 +279,10 @@ function main() {
       return y && y !== Number(base.meta.fiscal_year) ? ` · ${y} 사업보고서` : '';
     };
     if (cur && cur !== 'KRW') notes.push(`재무 통화가 ${cur}라서 규모 기준 신호(IC1·IF1·IF3·RS3)는 판정하지 않았어요.`);
-    if (!fa && !fx) notes.push('2025 사업보고서 재무가 없어(신규 상장 등) 재무 기준 신호는 판정하지 않았어요.');
+    // 기존 수집본은 재무가 없어도 assets를 {value:null, …} 객체로 갖고 있어 값으로 판단한다
+    if ((!fa || fa.value == null) && !fx) notes.push(TX.notesNoFin);
+    // 연장신고(PA1)는 12월 결산 회사의 3월 제출분만 모은다
+    if (c.closing_month && c.closing_month !== '12') notes.push(TX.notesNonDec);
 
     // --- 감사인 이력 ---
     const hist = new Map();
@@ -250,29 +291,48 @@ function main() {
     }
     const a26 = audBy.get(corp);
     if (a26) hist.set(2026, { a: normAuditor(a26.auditor_raw), raw: a26.auditor_raw, r: a26.rcept_no || '' });
-    const currentAuditor = (a26 && a26.auditor_raw) || c.auditor || '';
-    const auSrc = a26 ? '2026 반기보고서' : '2025 사업보고서';
-    const ag = auditorGroup(normAuditor(currentAuditor));
+    // 현재 감사인 = 2026 반기 → 2025 사업보고서 → (둘 다 없으면) 이력의 가장 최근 감사인으로 추정(ae = 그 연도) → 없으면 UNKNOWN.
+    // 감사인 그룹(삼일 여부)은 원문으로 정하고, au는 화면용 이름을 쓴다
+    let auRaw = '';
+    let auSrc = '확인 못 함';
+    let ae = null;
+    if (a26) {
+      auRaw = a26.auditor_raw;
+      auSrc = '2026 반기보고서';
+    } else if (c.auditor) {
+      auRaw = c.auditor;
+      auSrc = '2025 사업보고서';
+    } else {
+      const lastYear = Math.max(0, ...hist.keys());
+      if (lastYear) {
+        auRaw = hist.get(lastYear).raw;
+        ae = lastYear;
+        auSrc = `${lastYear} 사업보고서 이력(추정)`;
+      }
+    }
+    const currentAuditor = displayAuditor(auRaw);
+    const ag = (auRaw && auditorGroup(normAuditor(auRaw))) || 'UNKNOWN';
 
-    // PA2 주기적 지정 도래 추정
+    // PA2 주기적 지정 도래·첫해 추정. 근거 문구 앞에 유형 머리말을 붙인다
+    const pa2 = (type, ev, year) => addHit('PA2', `[${type}] ${ev}`, '', `AUD:${corp}`, hist.get(year).r);
     if (c.history_has_irregular_terms) {
       notes.push('결산 기수가 불규칙해 주기적 지정 추정(PA2)은 판정하지 않았어요.');
     } else if (hist.has(2026)) {
       const s26 = streakEnding(hist, 2026);
       const s25 = streakEnding(hist, 2025);
       if (s26.n === 6) {
-        addHit('PA2', `${s26.from}~2026 같은 감사인(${s26.a}) 6년 연속 → 2027 사업연도 주기적 지정 가능(추정)`, '', `AUD:${corp}`, hist.get(2026).r);
+        pa2(TX.pa2TypeDue, `${s26.from}~2026 같은 감사인(${displayAuditor(s26.a)}) 6년 연속 → 2027 사업연도 주기적 지정 가능(추정)`, 2026);
       } else if (s26.n > 6) {
-        addHit('PA2', `${s26.from}~2026 같은 감사인(${s26.a}) ${s26.n}년 연속 → 지정 유예(우수기업) 또는 과거 지정 이력 포함 가능, 2027 지정 여부 확인 필요(추정)`, '', `AUD:${corp}`, hist.get(2026).r);
+        pa2(TX.pa2TypeDeferred, `${s26.from}~2026 같은 감사인(${displayAuditor(s26.a)}) ${s26.n}년 연속 → 6년 자유선임 뒤 지정 이월 또는 우수기업 유예·면제 가능 → 2027 지정 여부 확인 필요(추정)`, 2026);
       } else if (s25.n >= 6 && hist.get(2026).a !== hist.get(2025).a) {
-        addHit('PA2', `2020~2025 같은 감사인 6년 뒤 2026년 ${hist.get(2026).raw}(으)로 변경 → 주기적 지정 첫해 추정`, '', `AUD:${corp}`, hist.get(2026).r);
+        pa2(TX.pa2TypeFirst, `2020~2025 같은 감사인 6년 뒤 2026년 ${displayAuditor(hist.get(2026).raw)}(으)로 변경 → 주기적 지정 첫해 추정`, 2026);
       }
     } else {
       const s25 = streakEnding(hist, 2025);
       if (s25.n >= 6) {
-        addHit('PA2', `2020~2025 같은 감사인(${s25.a}) 6년 연속 → 2026년 지정 첫해이거나 유예 추정 (2026 감사인 확인 필요)`, '', `AUD:${corp}`, hist.get(2025).r);
+        pa2(TX.pa2TypeCheck, `2020~2025 같은 감사인(${displayAuditor(s25.a)}) 6년 연속 → 2026년 지정 첫해이거나 유예 추정 (2026 감사인 확인 필요)`, 2025);
       } else if (s25.n === 5) {
-        addHit('PA2', `2021~2025 같은 감사인(${s25.a}) 5년 연속 → 2026년에도 같으면 2027 사업연도 지정 대상(추정)`, '', `AUD:${corp}`, hist.get(2025).r);
+        pa2(TX.pa2TypeCheck, `2021~2025 같은 감사인(${displayAuditor(s25.a)}) 5년 연속 → 2026년에도 같으면 2027 사업연도 지정 대상(추정)`, 2025);
       }
     }
 
@@ -302,7 +362,7 @@ function main() {
       if (!list.length) return;
       const f = list[0];
       const more = list.length > 1 ? ` 외 ${list.length - 1}건` : '';
-      addHit(id, `${readable(f.t)} · ${f.d}${more}`, f.d, f.r, f.r);
+      addHit(id, `${readable(f.t)} · ${f.d}${more}${corrSuffix(f.t)}`, f.d, f.r, f.r);
     };
     filingHit('PA3', mna);
     filingHit('IC3', mna);
@@ -312,7 +372,7 @@ function main() {
       const formal = fraud.filter((f) => !f.rel);
       const f = formal[0] || fraud[0];
       const more = fraud.length > 1 ? ` 외 ${fraud.length - 1}건` : '';
-      addHit('IC2', `${readable(f.t)} · ${f.d}${more}${formal.length ? '' : ` (${TX.ic2RelatedEvidence})`}`, f.d, f.r, f.r);
+      addHit('IC2', `${readable(f.t)} · ${f.d}${more}${formal.length ? '' : ` (${TX.ic2RelatedEvidence})`}${corrSuffix(f.t)}`, f.d, f.r, f.r);
       const relN = fraud.length - formal.length;
       if (relN) notes.push(String(TX.ic2RelatedNote || '').replace('{n}', relN));
     }
@@ -326,20 +386,21 @@ function main() {
         best = Math.max(best, run);
       }
       const latest = ext[0];
-      addHit('PA1', `${years.join('·')} 사업연도 사업보고서 제출기한 연장신고${best >= 2 ? ` (${best}년 연속)` : ''}`, latest.d, latest.r, latest.r);
+      addHit('PA1', `${years.join('·')} 사업연도 사업보고서 제출기한 연장신고${best >= 2 ? ` (${best}년 연속)` : ''}${corrSuffix(latest.t)}`, latest.d, latest.r, latest.r);
     }
-    for (const f of mna) filings.push({ cat: 'MNA', ...f });
-    for (const f of fraud) filings.push({ cat: 'FRAUD', ...f });
-    for (const f of ext) filings.push({ cat: 'DEADLINE', t: f.t, d: f.d, r: f.r });
+    for (const f of mna) filings.push({ cat: 'MNA', ...f, ...corrFlag(f.t) });
+    for (const f of fraud) filings.push({ cat: 'FRAUD', ...f, ...corrFlag(f.t) });
+    for (const f of ext) filings.push({ cat: 'DEADLINE', t: f.t, d: f.d, r: f.r, ...corrFlag(f.t) });
 
     // --- IC1 2029 연결 내부회계 감사 대상 ---
+    // IC1·IF3는 같은 '자산 규모' 사실이라 근거 키를 FIN:<corp>:SIZE 하나로 써서 점수에서 1개로 센다(PA3·IC3처럼)
     if (fx && (fx.CFS || fx.OFS)) {
       const rec = fxKrw(P.ic1AssetBasis === 'CFS' ? fx.CFS : fx.OFS);
       if (fx.CFS && rec && rec.assets != null && rec.assets >= P.ic1MinAssets && rec.assets < P.ic1MaxAssets) {
-        addHit('IC1', `자산총계 ${won(rec.assets)}(${P.ic1AssetBasis === 'CFS' ? '연결' : '별도'})${fyTag(rec)} · 연결 작성 → 2029 사업연도 연결 내부회계 감사(현행 일정)`, '', `FIN:${corp}:IC1`, rec.rcept_no);
+        addHit('IC1', `자산총계 ${won(rec.assets)}(${P.ic1AssetBasis === 'CFS' ? '연결' : '별도'})${fyTag(rec)} · 연결 작성 → 2029 사업연도 연결 내부회계 감사(현행 일정)`, '', `FIN:${corp}:SIZE`, rec.rcept_no);
       }
     } else if (basis === 'CFS' && krwAssets != null && krwAssets >= P.ic1MinAssets && krwAssets < P.ic1MaxAssets) {
-      addHit('IC1', `연결 자산총계 ${won(krwAssets)} · 연결 작성 → 2029 사업연도 연결 내부회계 감사(현행 일정, 연결 자산 근사)`, '', `FIN:${corp}:IC1`, fa.rcept_no || '');
+      addHit('IC1', `연결 자산총계 ${won(krwAssets)} · 연결 작성 → 2029 사업연도 연결 내부회계 감사(현행 일정, 연결 자산 근사)`, '', `FIN:${corp}:SIZE`, fa.rcept_no || '');
     }
 
     // --- IF2 지주회사·금융업 ---
@@ -350,7 +411,7 @@ function main() {
     const cfsRec = fx ? fxKrw(fx.CFS) : null;
     const cfsAssets = cfsRec ? cfsRec.assets : basis === 'CFS' ? krwAssets : null;
     if (cfsAssets != null && cfsAssets >= P.if3MinAssets) {
-      addHit('IF3', `연결 자산총계 ${won(cfsAssets)} · 연결 작성${cfsRec ? fyTag(cfsRec) : ''}`, '', `FIN:${corp}:IF3`, (cfsRec && cfsRec.rcept_no) || (fa && fa.rcept_no) || '');
+      addHit('IF3', `연결 자산총계 ${won(cfsAssets)} · 연결 작성${cfsRec ? fyTag(cfsRec) : ''}`, '', `FIN:${corp}:SIZE`, (cfsRec && cfsRec.rcept_no) || (fa && fa.rcept_no) || '');
     }
 
     // --- IF1 영업외손익 비중 (추가 수집 필요) ---
@@ -369,29 +430,62 @@ function main() {
     if (/한정|부적정|의견거절/.test(opinion)) {
       addHit('RS2', `2025 감사의견: ${opinion}`, '', `AUD:${corp}:RS2`, c.primary_report_rcept_no || '');
     }
+    if (!opinion) notes.push(TX.notesNoOpinion);
 
     // --- RS3 자본잠식 (추가 수집 필요) ---
-    if (extra.fin && mainRec && mainRec.capital > 0 && mainRec.equity != null) {
-      const cap = mainRec.capital;
+    // 자본금은 주 레코드(연결 우선) 값을 쓰고, 연결 자본금이 비면 같은 연도 별도(OFS) 자본금으로 대신한다(근거에 '별도' 표기).
+    // 지배기업 자본금은 연결·별도가 같아서다. capRatio = 잠식률(판정 못 하면 null) → 감자결정 RS1 판정에도 쓴다
+    let capRatio = null;
+    if (extra.fin && mainRec) {
+      let cap = mainRec.capital;
+      let capTag = '';
+      if (!(cap > 0) && mainRec.fs_div === 'CFS') {
+        const ofs = fxKrw(fx.OFS);
+        if (ofs && ofs.bsns_year === mainRec.bsns_year && ofs.capital > 0) {
+          cap = ofs.capital;
+          capTag = '(별도)';
+        }
+      }
       const eq = mainRec.equity;
-      if (eq <= 0) {
-        addHit('RS3', `전액잠식 (자본총계 ${won(eq)}, 자본금 ${won(cap)})${fyTag(mainRec)}`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, 1);
-      } else if ((cap - eq) / cap >= P.rs3Ratio) {
-        const r = (cap - eq) / cap;
-        addHit('RS3', `자본잠식률 ${pct(r)} (자본금 ${won(cap)}, 자본총계 ${won(eq)})${fyTag(mainRec)}`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, r);
+      if (cap > 0 && eq != null) {
+        capRatio = (cap - eq) / cap;
+        if (eq <= 0) {
+          addHit('RS3', `전액잠식 (자본총계 ${won(eq)}, 자본금 ${won(cap)}${capTag})${fyTag(mainRec)}`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, 1);
+        } else if (capRatio >= P.rs3Ratio) {
+          addHit('RS3', `자본잠식률 ${pct(capRatio)} (자본금 ${won(cap)}${capTag}, 자본총계 ${won(eq)})${fyTag(mainRec)}`, '', `FIN:${corp}:RS3`, mainRec.rcept_no, capRatio);
+        }
+      } else {
+        // 자본금(별도로도 못 채움) 또는 자본총계가 비어 판정 불가 (예: 젬백스는 연결 자본 계정이 모두 비어 있음)
+        notes.push(TX.notesNoCapital);
       }
     }
 
-    // --- RS1 부도·회생·채권은행 관리·감자 (감자결정은 자본잠식 50% 이상일 때만) ---
+    // --- RS1 부도·회생·채권은행 관리 (감자결정은 RS3, 영업정지는 RS2 또는 RS3와 같은 회사일 때만) ---
     const impaired = hits.some((h) => h.id === 'RS3');
-    const distressSig = distress.filter((f) => !RE_CAP_REDUCTION.test(baseTitle(f.t)) || impaired);
-    const capOnly = distress.filter((f) => !distressSig.includes(f));
+    const badOpinion = hits.some((h) => h.id === 'RS2');
+    // 신호에서 빼는 이유: cap(자본잠식 50% 미만 감자) · capUnknown(자본잠식 판정 불가 감자) · susp(재무위험 신호 없는 영업정지)
+    const nosigOf = (f) => {
+      const t = baseTitle(f.t);
+      if (RE_CAP_REDUCTION.test(t)) return impaired ? null : capRatio == null ? 'capUnknown' : 'cap';
+      if (RE_SUSPENSION.test(t)) return impaired || badOpinion ? null : 'susp';
+      return null;
+    };
+    const distressSig = distress.filter((f) => !nosigOf(f));
+    const distressOff = distress.filter((f) => nosigOf(f));
     if (extra.major) filingHit('RS1', distressSig);
-    if (capOnly.length) notes.push(extra.fin ? TX.rs1CapReductionNote : TX.rs1CapReductionNoFinNote);
-    for (const f of distressSig) filings.push({ cat: 'DISTRESS', ...f });
-    for (const f of capOnly) filings.push({ cat: 'DISTRESS', ...f, nosig: true });
-    // 최근 신호 공시 = 신호 근거가 되는 공시만(신호에서 뺀 감자결정은 제외)
-    for (const f of [...mna, ...distressSig, ...fraud]) if (f.d >= from3m) recent3m.add(f.r);
+    // 안내는 이유마다 회사당 한 번
+    const offKinds = new Set(distressOff.map(nosigOf));
+    if (offKinds.has('capUnknown')) notes.push(extra.fin ? TX.rs1CapUnknownNote : TX.rs1CapReductionNoFinNote);
+    else if (offKinds.has('cap')) notes.push(capRatio > 0 ? String(TX.rs1CapPartialNote || '').replace('{pct}', pctFloor(capRatio)) : TX.rs1CapReductionNote);
+    if (offKinds.has('susp')) notes.push(TX.rs1SuspNote);
+    for (const f of distressSig) filings.push({ cat: 'DISTRESS', ...f, ...corrFlag(f.t) });
+    for (const f of distressOff) filings.push({ cat: 'DISTRESS', ...f, ...corrFlag(f.t), nosig: nosigOf(f) });
+    // 최근 신호 공시 = 신호 근거가 되는 공시만(신호에서 뺀 감자결정·영업정지는 제외). 삼일 감사 고객 공시를 뺀 수도 따로 센다
+    for (const f of [...mna, ...distressSig, ...fraud]) {
+      if (f.d < from3m) continue;
+      recent3m.add(f.r);
+      if (ag !== 'SAMIL') recent3mNoSamil.add(f.r);
+    }
 
     const sz = krwAssets == null ? 'U' : krwAssets >= P.sizeLarge ? 'L' : krwAssets >= P.sizeMid ? 'M' : 'S';
     const ct = c.contacts || {};
@@ -404,6 +498,7 @@ function main() {
       ig,
       au: currentAuditor,
       ag,
+      ...(ae ? { ae } : {}),
       a: krwAssets,
       sz,
       ceo: c.ceo || '',
@@ -416,7 +511,7 @@ function main() {
 
     for (const f of [...mna, ...distressSig, ...fraud]) {
       const cat = mna.includes(f) ? 'MNA' : distressSig.includes(f) ? 'DISTRESS' : 'FRAUD';
-      recent.push({ c: corp, n: name, cat, t: readable(f.t), d: f.d, r: f.r, samil: ag === 'SAMIL', ...(f.rel ? { rel: true } : {}) });
+      recent.push({ c: corp, n: name, cat, t: readable(f.t), d: f.d, r: f.r, samil: ag === 'SAMIL', ...(f.rel ? { rel: true } : {}), ...corrFlag(f.t) });
     }
 
     details[corp] = {
@@ -433,6 +528,7 @@ function main() {
       au: currentAuditor,
       auSrc,
       ag,
+      ...(ae ? { ae } : {}),
       opinion,
       kam: c.core_audit_text || '',
       primary: c.primary_report_rcept_no || '',
@@ -460,6 +556,7 @@ function main() {
     signalCounts: counts,
     recent: recent.slice(0, 8),
     recent3m: recent3m.size,
+    recent3mNoSamil: recent3mNoSamil.size,
     recentFrom,
   };
 
@@ -492,6 +589,10 @@ function main() {
     log(`2026 반기 감사인 중 감사인 이름이 아닌 값 ${audIgnored.length}곳은 쓰지 않고 2025 감사인을 썼어요 (예: ${eg})`);
   }
   log(`신호별 해당 기업 수: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
+  const agCount = {};
+  for (const r of summary) agCount[r.ag] = (agCount[r.ag] || 0) + 1;
+  const estN = summary.filter((r) => r.ae).length;
+  log(`감사인 그룹: ${Object.entries(agCount).map(([k, v]) => `${k} ${v}`).join(' · ')} (이력으로 추정 ${estN}곳)`);
   log(`summary.json ${(size / 1024).toFixed(0)}KB, detail 파일 ${Object.keys(buckets).length}개 → ${OUT}`);
   log(`추가 수집 대상 목록 ${universe.length}곳 → data/universe.json`);
 }
