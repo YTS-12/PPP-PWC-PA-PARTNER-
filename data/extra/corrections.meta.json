@@ -1,0 +1,17 @@
+{
+  "targets": 324,
+  "records": 324,
+  "bySource": {
+    "major": 298,
+    "krx": 22,
+    "deadline": 4
+  },
+  "firstKnown": 324,
+  "withdrawn": 23,
+  "resolved": 2,
+  "fromSibling": 2,
+  "attachOnly": 102,
+  "noSection": 1,
+  "hash": "f50f8ab71905b371dc778b6e4079ca2dcd2bf6b5",
+  "collectedAt": "2026-10-06T08:55:06.426Z"
+}

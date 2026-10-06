@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
 import { applyFilters, leadHit, type Scored } from '@/lib/scoring';
-import { CONFIG, INDUSTRY_GROUPS, SERVICES, SIGNALS, SIG, SIZE_LABEL, SVC, auditorGroupText, auditorTag, cautionOf, defaultFilters, signalAvailable } from '@/lib/config';
+import { CONFIG, INDUSTRY_GROUPS, SERVICES, SIGNALS, SIG, SIZE_LABEL, STRONG_WARN_STYLE, SVC, TEXTS, auditorTag, cautionOf, defaultFilters, isSamilClient, signalAvailable } from '@/lib/config';
 import { siteUrl, won } from '@/lib/format';
-import { auditorGroupLabel, downloadCsv } from '@/lib/csv';
+import { auditorGroupLabel, auditorNameLabel, downloadCsv } from '@/lib/csv';
 import ModeBanner from '@/components/ModeBanner';
 import type { Filters, ServiceId } from '@/lib/types';
 
@@ -49,8 +49,9 @@ function exportCsv(rows: Scored[], asOf: string) {
       c.priority,
       c.hits.map((h) => SIG[h[0]].label).join(' / '),
       c.services.map((s) => SVC[s].name).join(' / '),
-      c.au,
-      auditorGroupLabel(c.ag, c.ae),
+      // 이력 추정 감사인은 '(추정)'을 붙여 확정 감사인과 구분하고, 구분 값도 목록 태그와 같게
+      auditorNameLabel(c),
+      auditorGroupLabel(c.ag, c.ae, c),
       c.a ?? '',
       c.rv ?? '',
       c.op ?? '',
@@ -76,7 +77,7 @@ export default function CompaniesPage() {
   const rows = useMemo(() => (data ? applyFilters(data.companies, f, extra) : []), [data, f, extra]);
   const hiddenSamil = useMemo(() => {
     if (!data || !f.hideSamil) return 0;
-    return applyFilters(data.companies, { ...f, hideSamil: false }, extra).filter((c) => c.ag === 'SAMIL').length;
+    return applyFilters(data.companies, { ...f, hideSamil: false }, extra).filter((c) => isSamilClient(c)).length;
   }, [data, f, extra]);
 
   if (error) return <div className="notice">{error}</div>;
@@ -130,7 +131,7 @@ export default function CompaniesPage() {
               {SIGNALS.filter((g) => g.service === s.id).map((g) => {
                 const ok = signalAvailable(g.id, extra);
                 return (
-                  <label key={g.id} className={`crit ${ok ? '' : 'off'}`} title={ok ? cautionOf(g.id, extra) : `추가 수집 전 · ${extra && g.needs ? CONFIG.extras[g.needs].command : ''}`}>
+                  <label key={g.id} className={`crit ${ok ? '' : 'off'}`} title={ok ? cautionOf(g.id, extra) : `추가 수집 전 · ${extra && g.needs ? CONFIG.extras[g.needs]?.command || '' : ''}`}>
                     <input type="checkbox" disabled={!ok} checked={ok && f.signals.includes(g.id)} onChange={() => toggleSignal(g.id)} />
                     <span>
                       {g.label}
@@ -196,7 +197,7 @@ export default function CompaniesPage() {
           <h2>
             추천 기업 <span className="subtle">{rows.length.toLocaleString()}곳</span>
           </h2>
-          <span className="pill">{f.hideSamil ? `삼일 감사 고객 ${hiddenSamil}곳 숨김` : '삼일 감사 고객 포함'}</span>
+          <span className="pill">{f.hideSamil ? `${TEXTS.samilTag} ${hiddenSamil}곳 숨김` : TEXTS.kpiSamilShown}</span>
         </div>
         <div className="table-wrap">
           <table className="co-table">
@@ -220,7 +221,7 @@ export default function CompaniesPage() {
             <tbody>
               {rows.slice(0, limit).map((c) => {
                 const top = leadHit(c.hits);
-                const at = auditorTag(c.ag, c.ae);
+                const at = auditorTag(c);
                 const saved = !!app.personal.shortlist[c.c];
                 return (
                   <tr
@@ -237,7 +238,7 @@ export default function CompaniesPage() {
                       <Link href={`/companies/${c.c}`} className="company">
                         {c.n}
                       </Link>{' '}
-                      <span className={`tag ${at.cls}`} title={at.title || undefined}>
+                      <span className={`tag ${at.cls}`} title={at.title || undefined} style={at.strong ? STRONG_WARN_STYLE.tag : undefined}>
                         {at.text}
                       </span>
                       <span className="ticker">

@@ -1,4 +1,4 @@
-// 추가 수집 2: 2026 반기보고서의 감사인 (현재 감사인 · 주기적 지정 판정 보완)
+// 추가 수집 5: 2026 반기보고서의 감사인 (현재 감사인 · 주기적 지정 판정 보완)
 // 사용: npm run collect:auditor                 (전체를 한 사람이)
 //       npm run collect:auditor -- --part 1/2   (두 사람이 나눠서: 1/2, 2/2)
 // 결과: data/extra/auditor_2026h1.part<k>of<n>.jsonl, data/extra/auditor2026_part<k>of<n>.meta.json

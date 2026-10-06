@@ -4,22 +4,32 @@ import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
 import { applyFilters } from '@/lib/scoring';
-import { CONFIG, SERVICES, SIGNALS, signalAvailable } from '@/lib/config';
+import { CONFIG, SERVICES, SIGNALS, TEXTS, catLabel, filingDateText, isSamilClient, signalAvailable } from '@/lib/config';
 import ModeBanner from '@/components/ModeBanner';
 import { kstDate } from '@/lib/format';
 import type { ExtraKey, ExtraMetaRecord, SummaryMeta } from '@/lib/types';
 
-const CAT_LABEL = { MNA: '합병·분할·양수', DISTRESS: '부도·회생·감자·영업정지', FRAUD: '횡령·배임' } as const;
+// 수집 기록(meta.json) 이름이 추가 수집 키와 다를 수 있는 것: 감사인 보완·감사인 화면 보완은 결과 파일 이름(auditor_supp·auditor_web)으로도 받는다
+const META_NAMES: Partial<Record<ExtraKey, string[]>> = {
+  auditorSupp: ['auditorSupp', 'auditor_supp'],
+  auditorWeb: ['auditorWeb', 'auditor_web'],
+};
 
 /**
  * 데이터 상태 칩용 수집 기록 요약. meta.extraMeta 는 data/extra/<이름>.meta.json 을 그대로 모은 것이라
- * 키는 fin·major·krx·deadline, 감사인은 파트마다 auditor2026_part1of1 처럼 따로 있다(→ 'auditor2026' 로 시작하는 기록을 모두 모음).
+ * 키는 fin·major·krx·deadline·corrections·auditorSupp·auditorWeb, 감사인은 파트마다 auditor2026_part1of1 처럼 따로 있다(→ 'auditor2026' 로 시작하는 기록을 모두 모음).
+ * 감사인 보완(auditorSupp)·감사인 화면 보완(auditorWeb, DART 공시 화면, 2026-10-06 결정 A)은 결과 파일 이름(auditor_supp·auditor_web)으로
+ * 기록할 수 있어 두 이름(과 그 파트)을 모두 받는다.
  * 명령마다 필드가 달라 값은 형식을 확인한 뒤 쓴다.
  * 칩에 보이는 개수: 주요계정(fin)은 받은 회사 수(companies) 'N곳', 감사인은 감사인을 확인한 회사 수(found) 합계
- * '감사인 확인 N곳', 주요사항·거래소공시·연장신고는 결과 건수(records) 'N건'. 해당 필드가 없는 예전 기록은 records 'N건'.
+ * '감사인 확인 N곳', 주요사항·거래소공시·연장신고·감사인 보완·감사인 화면 보완·정정공시 확인은 결과 건수(records) 'N건'.
+ * 해당 필드가 없는 예전 기록은 records 'N건'. 예전 summary.json 의 meta.extra 에 키가 없으면(auditorWeb 등) '미수집'으로 보인다.
  */
 function extraRecord(key: ExtraKey, extraMeta: SummaryMeta['extraMeta'] | undefined) {
-  const recs = Object.entries(extraMeta || {}).filter(([name]) => (key === 'auditor2026' ? name.startsWith('auditor2026') : name === key));
+  const names = META_NAMES[key] || [key];
+  const recs = Object.entries(extraMeta || {}).filter(([name]) =>
+    key === 'auditor2026' ? name.startsWith('auditor2026') : names.some((n) => name === n || name.startsWith(`${n}_part`) || name.startsWith(`${n}.part`)),
+  );
   if (!recs.length) return null;
   // 기록의 field 값: 유한한 숫자일 때만 쓴다 (형식이 다르면 null)
   const num = (m: ExtraMetaRecord | undefined, field: string): number | null => {
@@ -73,6 +83,8 @@ export default function DashboardPage() {
     () => (data ? applyFilters(data.companies, { ...app.filters, query: '' }, data.meta.extra) : []),
     [data, app.filters],
   );
+  // 최근 공시의 삼일 표시는 summary 행의 확정 감사인으로 다시 본다(예전 데이터의 samil은 이력 추정 삼일도 포함)
+  const byCorp = useMemo(() => new Map((data?.companies || []).map((c) => [c.c, c])), [data]);
 
   if (error) return <div className="notice">{error}</div>;
   if (!data) return <div className="loading">데이터를 불러오는 중…</div>;
@@ -82,18 +94,20 @@ export default function DashboardPage() {
   const inProgress = shortIds.filter((id) => ['검토 중', '제안 대상'].includes(app.personal.shortlist[id].status)).length;
   const bars = SERVICES.map((s) => ({ s, n: scored.filter((c) => c.services.includes(s.id)).length }));
   const max = Math.max(1, ...bars.map((b) => b.n));
-  const extras = Object.entries(CONFIG.extras) as [ExtraKey, { label: string; command: string }][];
+  const extras = Object.entries(CONFIG.extras).filter(([, v]) => !!v) as [ExtraKey, { label: string; command: string }][];
   const pendingSignals = SIGNALS.filter((s) => !signalAvailable(s.id, meta.extra)).map((s) => s.label);
-  // 최근 3개월 집계에 들어가는 공시 분류. 주요사항보고서 수집 전에는 기존 수집본 분류(합병·주식양수·영업양수·주식교환)만 센다
+  // 최근 3개월 집계에 들어가는 공시 분류. 주요사항보고서 수집 전에는 기존 수집본 분류(합병·주식양수·영업양수·주식교환)만 센다.
+  // 거래소 시장조치(RS1 근거)와 횡령·배임은 거래소공시 수집 뒤에 센다
   const recentKinds = [
-    meta.extra.major ? CAT_LABEL.MNA : '합병·양수 등(기존 수집본)',
-    meta.extra.major ? CAT_LABEL.DISTRESS : '',
-    meta.extra.krx ? CAT_LABEL.FRAUD : '',
+    meta.extra.major ? catLabel('MNA') : '합병·양수 등(기존 수집본)',
+    meta.extra.major ? catLabel('DISTRESS') : '',
+    meta.extra.krx ? catLabel('MARKET') : '',
+    meta.extra.krx ? catLabel('FRAUD') : '',
   ]
     .filter(Boolean)
     .join(' · ');
   const isUser = app.mode === 'user';
-  // 최근 3개월 신호 공시: 삼일 감사 고객을 숨기면 그 회사 공시를 뺀 수(recent3mNoSamil). 예전 데이터라 값이 없으면 전체 수를 쓰고 '포함'으로 적는다
+  // 최근 3개월 신호 공시(최초 공시일 기준): 삼일 감사 고객을 숨기면 그 회사 공시를 뺀 수(recent3mNoSamil). 예전 데이터라 값이 없으면 전체 수를 쓰고 '포함'으로 적는다
   const recentNoSamil = typeof meta.recent3mNoSamil === 'number' ? meta.recent3mNoSamil : null;
   const recentExclSamil = app.filters.hideSamil && recentNoSamil !== null;
   const recentCount = recentExclSamil ? recentNoSamil : meta.recent3m;
@@ -124,7 +138,7 @@ export default function DashboardPage() {
         <div className="card">
           <div className="kpi-label">현재 조건의 추천 기업</div>
           <div className="kpi-value">{scored.length.toLocaleString()}</div>
-          <div className="kpi-note">{app.filters.hideSamil ? '삼일 감사 고객 숨김' : '삼일 감사 고객 포함'}</div>
+          <div className="kpi-note">{app.filters.hideSamil ? TEXTS.kpiSamilHidden : TEXTS.kpiSamilShown}</div>
         </div>
         <div className="card">
           <div className="kpi-label">내 제안 후보</div>
@@ -135,7 +149,7 @@ export default function DashboardPage() {
           <div className="kpi-label">최근 3개월 신호 공시</div>
           <div className="kpi-value">{recentCount}</div>
           <div className="kpi-note">
-            {recentKinds} · 삼일 감사 고객 {recentExclSamil ? '제외' : '포함'}
+            {recentKinds} · {recentExclSamil ? TEXTS.kpiRecentExclSamil : TEXTS.kpiRecentInclSamil}
           </div>
         </div>
       </div>
@@ -170,17 +184,18 @@ export default function DashboardPage() {
               <div className={`dot ${r.cat !== 'MNA' ? 'warn' : ''}`} />
               <div>
                 <strong>
-                  <Link href={`/companies/${r.c}`}>{r.n}</Link> · {r.cat === 'MNA' && !meta.extra.major ? '합병·양수' : CAT_LABEL[r.cat]}
+                  <Link href={`/companies/${r.c}`}>{r.n}</Link> · {r.cat === 'MNA' && !meta.extra.major ? '합병·양수' : catLabel(r.cat)}
                 </strong>
                 <p>
-                  {r.t} · {r.d}
-                  {r.corr && (
+                  {/* 정정공시이고 최초 공시일을 알면 '최초 … · 정정 …', 모르면 접수일 뒤에 '정정' 태그 */}
+                  {r.t} · {filingDateText(r)}
+                  {r.corr && !r.first && (
                     <span className="tag gray" style={{ marginLeft: 6, padding: '2px 6px' }}>
                       {CONFIG.texts.corrTag}
                     </span>
                   )}
                   {r.rel && <span style={{ color: 'var(--amber)' }}> · {CONFIG.texts.ic2RelatedTag}</span>}
-                  {r.samil && <span style={{ color: 'var(--red)' }}> · 삼일 감사 고객</span>}
+                  {(byCorp.has(r.c) ? isSamilClient(byCorp.get(r.c)) : r.samil) && <span style={{ color: 'var(--red)' }}> · {TEXTS.samilTag}</span>}
                 </p>
               </div>
             </div>

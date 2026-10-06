@@ -11,7 +11,10 @@
     "collect:auditor": "node scripts/collect/auditor-2026h1.mjs",
     "collect:major": "node scripts/collect/filings-major.mjs",
     "collect:krx": "node scripts/collect/filings-krx.mjs",
-    "collect:deadline": "node scripts/collect/filings-deadline.mjs"
+    "collect:deadline": "node scripts/collect/filings-deadline.mjs",
+    "collect:corrections": "node scripts/collect/corrections.mjs",
+    "collect:auditor-supp": "node scripts/collect/auditor-supp.mjs",
+    "collect:auditor-web": "node scripts/collect/auditor-web.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

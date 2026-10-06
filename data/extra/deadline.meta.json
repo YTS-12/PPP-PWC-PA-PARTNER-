@@ -4,8 +4,9 @@
     "2025",
     "2026"
   ],
+  "period": "3/1~4/10",
   "type": "ALL",
-  "records": 78,
-  "hash": "00b3528c1b7e04a9db0e20d6c6ef36259eb9d772",
-  "collectedAt": "2026-10-04T23:05:30.496Z"
+  "records": 91,
+  "hash": "483765f827e867f3815ecb898610334f5aa9de03",
+  "collectedAt": "2026-10-05T15:55:20.546Z"
 }

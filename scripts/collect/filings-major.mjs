@@ -1,4 +1,4 @@
-// 추가 수집 3: 주요사항보고서(B) 최근 12개월 — 합병·분할 등과 부도·회생·감자 재분류용
+// 추가 수집 2: 주요사항보고서(B) 최근 12개월 — 합병·분할 등과 부도·회생·감자 재분류용
 // 사용: npm run collect:major                    (오늘까지 12개월)
 //       npm run collect:major -- --end 20261006  (다음 날 이어받기: 첫 실행일을 그대로 준다)
 // 결과: data/extra/filings_major.jsonl, data/extra/major.meta.json

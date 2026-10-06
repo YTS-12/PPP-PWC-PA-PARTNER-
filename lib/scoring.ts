@@ -1,4 +1,4 @@
-import { SERVICES, SIG, signalAvailable } from './config';
+import { SERVICES, SIG, isSamilClient, signalAvailable } from './config';
 import type { CompanySummary, DetailHit, ExtraKey, Filters, Hit, ServiceId } from './types';
 
 export interface Scored extends CompanySummary {
@@ -76,8 +76,8 @@ export function applyFilters(
     if (f.market !== 'all' && c.m !== f.market) continue;
     if (f.size !== 'all' && c.sz !== f.size) continue;
     if (f.industry !== 'all' && c.ig !== f.industry) continue;
-    // 이력으로 추정한 삼일(ae 있음)도 ag가 SAMIL이라 같이 숨긴다. 감사인 미확인(UNKNOWN)은 숨기지 않고 태그로 알린다
-    if (!opts.ignoreSamil && f.hideSamil && c.ag === 'SAMIL') continue;
+    // 확정 감사인이 삼일인 회사만 숨긴다. 이력 추정(ae)은 삼일이어도 숨기지 않고 주황 경고로 알린다(감사인 미확인과 같이 태그로 표시)
+    if (!opts.ignoreSamil && f.hideSamil && isSamilClient(c)) continue;
     if (q && !(c.n.toLowerCase().includes(q) || c.s.toLowerCase().includes(q))) continue;
     const hits = c.h.filter((h) => active.has(h[0]));
     const score = scoreOf(hits);

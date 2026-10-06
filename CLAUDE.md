@@ -10,15 +10,15 @@
 
 ## 지켜야 할 것
 - 비밀 키(`DART_API_KEY`, Supabase service_role 등)를 코드·커밋·`NEXT_PUBLIC_` 변수에 넣지 않는다. `.env`와 `data/raw/`는 커밋하지 않는다.
-- 앱 실행 중에 OpenDART나 LLM API를 호출하지 않는다. OpenDART는 `scripts/collect/`에서만 부른다.
+- 앱 실행 중에 OpenDART나 LLM API를 호출하지 않는다. OpenDART는 `scripts/collect/`에서만 부른다. DART 공시 화면(dart.fss.or.kr)은 `collect:corrections`·`collect:auditor-web`만 1초에 1건 이하로 읽는다.
 - 신호 이름·기준값·문구는 `config/signals.json`에서만 고친다. 화면과 스크립트에 따로 정의하지 않는다.
 - 공시 데이터에서 쓰지 않는 항목: 감사시간 초과, 감사보고서 강조사항, 감사 전 재무제표 미제출. 다시 넣지 않는다.
 - 대표자명은 공시된 기업개황 정보로 적재·표시한다. 담당자 개인 연락처, 법인·사업자등록번호는 수집하지 않는다.
-- 독립성: 현재 감사인이 삼일회계법인이면 목록에서 기본 숨김, 상세 화면에 경고. 현재 감사인을 모르면 이력으로 추정하고 표시한다. 문구는 '추정'·'가능'으로 쓰고 용역 수요를 단정하지 않는다.
+- 독립성: 현재 감사인이 삼일회계법인이면 목록에서 기본 숨김, 상세 화면에 경고. 현재 감사인을 공시에서 못 찾으면(감사용역체결현황·DART 공시 화면 보완 포함) '감사인 미확인'으로 두고, 이력상 감사인은 '추정'으로 표시만 하며 숨김에 쓰지 않는다. 문구는 '추정'·'가능'으로 쓰고 용역 수요를 단정하지 않는다.
 - 금액은 원 단위 정수로 저장하고 화면에서 조·억으로 바꾼다. 외화 재무는 규모 기준 신호에서 빼고 이유를 표시한다.
 - 스팩(이름에 '스팩')과 리츠·인프라펀드(instrument_type RT·IF·MF)는 추천 대상에서 뺀다.
 
 ## 자주 쓰는 명령
 - `npm run dev` 로컬 실행 / `npm run build` 배포 빌드 확인
 - `npm run data:build` 화면용 데이터 다시 만들기
-- `npm run collect:fin | collect:auditor | collect:major | collect:krx | collect:deadline` 추가 수집
+- `npm run collect:fin | collect:major | collect:krx | collect:deadline | collect:auditor | collect:auditor-supp | collect:auditor-web | collect:corrections` 추가 수집(이 순서로 실행한 뒤 `data:build`)

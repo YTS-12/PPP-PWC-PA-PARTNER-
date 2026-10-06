@@ -697,7 +697,7 @@
 {"corp_code":"00155124","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"한영회계법인","invalid_raw":"","period_label":"제53기\n(당기)","rcept_no":"20260814003495"}
 {"corp_code":"00129280","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"이촌회계법인","invalid_raw":"","period_label":"제51기\n(당반기)","rcept_no":"20260814003303"}
 {"corp_code":"00815369","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"선진회계법인","invalid_raw":"","period_label":"제17기 반기(당기)","rcept_no":"20260814003271"}
-{"corp_code":"00124027","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"서현회계법인","invalid_raw":"","period_label":"제50기(전기)","rcept_no":"20260814000505"}
+{"corp_code":"00124027","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"","invalid_raw":"당반기 행 없음","period_label":"제50기(전기)","rcept_no":"20260814000505"}
 {"corp_code":"00136402","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼도회계법인","invalid_raw":"","period_label":"제57기\n(당반기)","rcept_no":"20260814000855"}
 {"corp_code":"00132868","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"한영회계법인","invalid_raw":"","period_label":"제51기\n(당기)","rcept_no":"20260814003927"}
 {"corp_code":"00141626","fiscal_year":2026,"reprt_code":"11012","status":"013","auditor_raw":"","invalid_raw":"","period_label":"","rcept_no":""}
@@ -978,7 +978,7 @@
 {"corp_code":"00128315","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"안진회계법인","invalid_raw":"","period_label":"제46기\n (당기)","rcept_no":"20260814003131"}
 {"corp_code":"00273110","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼일회계법인","invalid_raw":"","period_label":"제 38 기\n(당반기)","rcept_no":"20260814003811"}
 {"corp_code":"00444329","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼일회계법인","invalid_raw":"","period_label":"제27기\n(당반기)","rcept_no":"20260814003490"}
-{"corp_code":"01336461","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"대주회계법인","invalid_raw":"","period_label":"제13기\n(전기)","rcept_no":"20260814002265"}
+{"corp_code":"01336461","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"","invalid_raw":"당반기 행 없음","period_label":"제13기\n(전기)","rcept_no":"20260814002265"}
 {"corp_code":"00506294","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"대주회계법인","invalid_raw":"","period_label":"제28기 반기\n(당기)","rcept_no":"20260814002908"}
 {"corp_code":"00623661","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"한영회계법인","invalid_raw":"","period_label":"제21기\n(당반기)","rcept_no":"20260814000624"}
 {"corp_code":"01566248","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼정회계법인","invalid_raw":"","period_label":"제 6 기 반기\n(당반기)","rcept_no":"20260814001912"}
@@ -1040,7 +1040,7 @@
 {"corp_code":"00657002","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"태일회계법인","invalid_raw":"","period_label":"제25기 2분기\n(당기)","rcept_no":"20260814002567"}
 {"corp_code":"01368354","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼일회계법인","invalid_raw":"","period_label":"제8기\n(당반기)","rcept_no":"20260814003746"}
 {"corp_code":"01042711","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"","invalid_raw":"-","period_label":"제13기 반기\n(당반기)","rcept_no":"20261002000565"}
-{"corp_code":"01686755","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"대주회계법인","invalid_raw":"","period_label":"제 4 기\n(전기)","rcept_no":"20260814001699"}
+{"corp_code":"01686755","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"","invalid_raw":"당반기 행 없음","period_label":"제 4 기\n(전기)","rcept_no":"20260814001699"}
 {"corp_code":"00298447","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"다산회계법인","invalid_raw":"","period_label":"제33기 (당반기)","rcept_no":"20260814002657"}
 {"corp_code":"01074862","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼정회계법인","invalid_raw":"","period_label":"제12기 반기","rcept_no":"20260814004117"}
 {"corp_code":"00628860","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼일회계법인","invalid_raw":"","period_label":"제20기\n(당반기)","rcept_no":"20260814003548"}
@@ -2125,7 +2125,7 @@
 {"corp_code":"00755739","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"도원회계법인","invalid_raw":"","period_label":"제18기\n2분기\n(당기)","rcept_no":"20260814004074"}
 {"corp_code":"00602279","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"한영회계법인","invalid_raw":"","period_label":"제30기(당기)","rcept_no":"20260814001909"}
 {"corp_code":"00532129","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"대주회계법인","invalid_raw":"","period_label":"제34기\n(당기)","rcept_no":"20260814001196"}
-{"corp_code":"01153105","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼일회계법인","invalid_raw":"","period_label":"제18기\n(전기)","rcept_no":"20260814001185"}
+{"corp_code":"01153105","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"","invalid_raw":"당반기 행 없음","period_label":"제18기\n(전기)","rcept_no":"20260814001185"}
 {"corp_code":"00350020","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"대주회계법인","invalid_raw":"","period_label":"제28기 반기\n(당기)","rcept_no":"20260814003212"}
 {"corp_code":"00216434","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"삼일회계법인","invalid_raw":"","period_label":"제36기 반기\n(당기)","rcept_no":"20260826000127"}
 {"corp_code":"00265005","fiscal_year":2026,"reprt_code":"11012","status":"000","auditor_raw":"대성회계법인","invalid_raw":"","period_label":"제30기 2분기\n(당기)","rcept_no":"20260814003654"}

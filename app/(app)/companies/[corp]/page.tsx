@@ -4,21 +4,26 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useApp } from '@/lib/app-state';
 import { loadDetail, useSummary } from '@/lib/data';
-import { CONFIG, SIG, STATUSES, cautionOf } from '@/lib/config';
+import {
+  CONFIG,
+  SIG,
+  STATUSES,
+  STRONG_WARN_STYLE,
+  TEXTS,
+  auditorTag,
+  auditorView,
+  catLabel,
+  cautionOf,
+  estAuditorNote,
+  estAuditorTitle,
+  filingDateText,
+  ic2TypeTag,
+  marketKindLabel,
+  nosigTag,
+} from '@/lib/config';
 import { dartUrl, pct, siteUrl, withCurrency } from '@/lib/format';
 import { scoreDetailHits } from '@/lib/scoring';
-import type { CompanyDetail, DetailHit, FilingItem, FinRec, Status } from '@/lib/types';
-
-const CAT_LABEL = { MNA: '합병·분할·양수 결정', DISTRESS: '부도·회생·감자·영업정지', FRAUD: '횡령·배임', DEADLINE: '제출기한 연장신고' } as const;
-
-/** 신호에서 뺀 공시의 태그 문구. 예전 데이터의 nosig:true는 'cap'(자본잠식 50% 미만 감자)으로 읽는다 */
-function nosigTag(nosig: FilingItem['nosig'] | boolean | undefined): string {
-  const reason = nosig === true ? 'cap' : nosig;
-  if (reason === 'cap') return CONFIG.texts.rs1CapReductionTag;
-  if (reason === 'capUnknown') return CONFIG.texts.rs1CapUnknownTag || CONFIG.texts.rs1CapReductionTag;
-  if (reason === 'susp') return CONFIG.texts.rs1SuspTag || '신호 제외';
-  return '';
-}
+import type { CompanyDetail, DetailHit, FinRec, Status } from '@/lib/types';
 
 function copyText(text: string, done: () => void, fail: () => void) {
   if (navigator.clipboard?.writeText) {
@@ -86,15 +91,22 @@ export default function CompanyDetailPage() {
   const nonopRatio = nonop != null && main && main.op ? Math.abs(nonop) / Math.abs(main.op) : null;
   const ratioText = nonopRatio != null ? `영업이익의 ${pct(nonopRatio)}` : '';
   const nonopSrc = foreign
-    ? ['외화 재무 · 규모 신호 제외', ratioText].filter(Boolean).join(' · ')
+    ? [TEXTS.fxSizeExcluded, ratioText].filter(Boolean).join(' · ')
     : ratioText || (main ? '계산 불가' : noFin);
-  const samil = d.ag === 'SAMIL';
-  // 감사인 미확인: 현재 감사인도 이력도 못 찾음(예전 데이터의 빈 ag 포함)
-  const unknownAu = d.ag === 'UNKNOWN' || !d.ag;
-  // 이력 추정: 현재 감사인을 못 찾아 ae 연도 사업보고서 감사인으로 정함
-  const est = !unknownAu && !!d.ae;
-  const estNote = est ? (CONFIG.texts.estAuditorNote || '').replace('{year}', String(d.ae)).replace('{au}', d.au || '-') : '';
-  const auSrcText = est ? `추정 · ${d.auSrc.replace(/\(추정\)$/, '')}` : d.auSrc;
+  // 독립성: 확정 감사인(ag)만 삼일 경고에 쓰고, 이력 추정(ae)은 표시만 한다(추정 감사인이 삼일이면 진한 주황 경고만)
+  const av = auditorView(d);
+  const samil = av.group === 'SAMIL';
+  const est = av.est;
+  // 감사인 미확인: 확정 감사인도 이력도 못 찾음(예전 데이터의 빈 ag 포함)
+  const unknownAu = av.group === 'UNKNOWN' && !est;
+  const auTag = auditorTag(d);
+  // 헤더 감사인 표기. 출처가 '확인 못 함'이면 '감사인 미확인'과 겹치므로 출처를 붙이지 않는다
+  const auSrc = d.auSrc && d.auSrc !== TEXTS.auSrcNone ? d.auSrc : '';
+  const auHead = est
+    ? `${TEXTS.unknownAuditorShort} · ${av.estAu}${auSrc ? `(${auSrc})` : TEXTS.estAuditorSuffix}`
+    : unknownAu
+      ? `${TEXTS.unknownAuditorShort}${auSrc ? `(${auSrc})` : ''}`
+      : `현재 감사인 ${d.au}${auSrc ? `(${auSrc})` : ''}`;
   const isUser = app.mode === 'user';
 
   const contactText = [
@@ -121,10 +133,12 @@ export default function CompanyDetailPage() {
       `- 회사 대표 연락처: ${d.contact.phone || '-'} / ${d.contact.homepage || '-'} (DART 기업개황)`,
       `- 독립성: ${
         samil
-          ? `현재 감사인 삼일${est ? `(${d.ae} 사업보고서 이력 기준 추정)` : ''} → 사내 독립성 검토 필요`
-          : unknownAu
-            ? '감사인 미확인 → 독립성 직접 확인 필요'
-            : `현재 감사인 ${d.au}${est ? `(${d.ae} 사업보고서 이력 기준 추정)` : ''} (사내 절차로 최종 확인)`
+          ? '현재 감사인 삼일 → 사내 독립성 검토 필요'
+          : est
+            ? estAuditorTitle(av)
+            : unknownAu
+              ? TEXTS.unknownAuditorTag
+              : `현재 감사인 ${d.au} (사내 절차로 최종 확인)`
       }`,
       '- 비고: 공시 신호 기반 검토 후보이며 용역 수요를 확정하지 않음',
     ];
@@ -142,7 +156,7 @@ export default function CompanyDetailPage() {
           </p>
           <h1 style={{ marginTop: 12 }}>{d.n} · 기업 분석</h1>
           <p>
-            {d.m === 'KOSPI' ? '코스피' : '코스닥'} · {d.ig} · 현재 감사인 {d.au || '미확인'}({auSrcText}) · 데이터 기준일 {meta?.dataAsOf || '-'}
+            {d.m === 'KOSPI' ? '코스피' : '코스닥'} · {d.ig} · {auHead} · 데이터 기준일 {meta?.dataAsOf || '-'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -162,27 +176,21 @@ export default function CompanyDetailPage() {
       {samil && (
         <div className="banner indep">
           <span>
-            <b>삼일 감사 고객</b> · 현재 감사인이 삼일회계법인이에요. 재무제표 작성 지원·재무정보체제 구축 등 비감사업무는 법적으로 제한될 수 있으니, 제안 전 사내 독립성 검토가 필요해요.
-            {est && (
-              <>
-                <br />
-                <b>이력 기준 추정</b> · {estNote}
-              </>
-            )}
+            <b>{TEXTS.samilTag}</b> · {TEXTS.samilBanner}
           </span>
         </div>
       )}
       {unknownAu && (
         <div className="banner indep-warn">
           <span>
-            <b>{CONFIG.texts.unknownAuditorTag}</b> · 현재 감사인과 감사인 이력을 공시에서 확인하지 못했어요. 삼일 감사 고객일 수 있으니 제안 전 사내 절차로 독립성을 직접 확인하세요.
+            <b>{TEXTS.unknownAuditorTag}</b> · {TEXTS.unknownAuditorBanner}
           </span>
         </div>
       )}
-      {est && !samil && (
-        <div className="banner indep-warn">
+      {est && (
+        <div className="banner indep-warn" style={av.estSamil ? STRONG_WARN_STYLE.banner : undefined}>
           <span>
-            <b>감사인 추정</b> · {estNote}
+            <b>{av.estSamil ? TEXTS.estSamilWarn : TEXTS.estAuditorLabel}</b> · {estAuditorNote(av)}
           </span>
         </div>
       )}
@@ -191,10 +199,11 @@ export default function CompanyDetailPage() {
         <div className="company-head">
           <div>
             <span className="tag">{d.ig}</span> <span className="tag gray">{d.m === 'KOSPI' ? '코스피' : '코스닥'}</span>{' '}
-            {unknownAu ? (
-              <span className="tag amber">{CONFIG.texts.unknownAuditorTag}</span>
-            ) : (
-              !samil && <span className="tag gray">타 법인 감사 고객{est ? '(추정)' : ''}</span>
+            {/* 삼일(확정)은 위 빨간 띠로 알리고, 그 밖은 목록과 같은 독립성 태그 */}
+            {!samil && (
+              <span className={`tag ${auTag.cls}`} title={auTag.title || undefined} style={auTag.strong ? STRONG_WARN_STYLE.tag : undefined}>
+                {auTag.text}
+              </span>
             )}
             <h2>{d.n}</h2>
             <div className="subtle">
@@ -420,30 +429,56 @@ export default function CompanyDetailPage() {
                 </a>
               </div>
             )}
-            {d.filings.map((f) => (
-              <div className="doc" key={f.r}>
-                <div>
-                  <b>{f.t}</b>
-                  <div className="subtle" style={{ fontSize: 11, marginTop: 3 }}>
-                    {f.cat === 'MNA' && !meta?.extra.major ? '합병·양수 결정' : CAT_LABEL[f.cat]} · {f.d} · 접수번호 {f.r}
-                    {f.rel && <span className="tag amber" style={{ marginLeft: 6 }}>{CONFIG.texts.ic2RelatedTag}</span>}
-                    {f.corr && (
-                      <span className="tag gray" style={{ marginLeft: 6 }}>
-                        {CONFIG.texts.corrTag}
-                      </span>
-                    )}
-                    {f.nosig && (
-                      <span className="tag gray" style={{ marginLeft: 6 }}>
-                        {nosigTag(f.nosig)}
-                      </span>
-                    )}
+            {d.filings.map((f) => {
+              // 분류 이름(거래소 시장조치면 종류까지. 옛 데이터의 내부결산 시점 공시는 제목으로 '내부결산 기준 사유 발생(감사 전)') ·
+              // 날짜(정정공시는 '최초 … · 정정 …') · 접수번호(정정본) · 신호 제외 이유 태그(철회·사유 해소·12개월 전·자동 정지·감자·영업정지)
+              const mkt = f.cat === 'MARKET' ? marketKindLabel(f.mkt, f.t) : '';
+              const ic2 = f.cat === 'FRAUD' ? ic2TypeTag(f) : null;
+              const off = nosigTag(f.nosig);
+              return (
+                <div className="doc" key={`${f.cat}:${f.r}`}>
+                  <div>
+                    <b>{f.t}</b>
+                    <div className="subtle" style={{ fontSize: 11, marginTop: 3 }}>
+                      {f.cat === 'MNA' && !meta?.extra.major ? '합병·양수 결정' : catLabel(f.cat)}
+                      {mkt ? ` · ${mkt}` : ''} · {filingDateText(f)} · 접수번호 {f.r}
+                      {ic2 && (
+                        <span className={`tag ${ic2.cls}`} style={{ marginLeft: 6 }}>
+                          {ic2.text}
+                        </span>
+                      )}
+                      {f.sub && (
+                        <span className="tag gray" style={{ marginLeft: 6 }}>
+                          {TEXTS.ic2SubTag}
+                        </span>
+                      )}
+                      {/* 최초 공시일을 알면 날짜에 '정정'이 이미 보이므로 '정정' 태그는 모를 때만. 첨부정정은 원공시로 연결한다는 태그 */}
+                      {f.link ? (
+                        <span className="tag gray" style={{ marginLeft: 6 }}>
+                          {TEXTS.linkFirstTag}
+                        </span>
+                      ) : (
+                        f.corr &&
+                        !f.first && (
+                          <span className="tag gray" style={{ marginLeft: 6 }}>
+                            {TEXTS.corrTag}
+                          </span>
+                        )
+                      )}
+                      {off && (
+                        <span className="tag gray" style={{ marginLeft: 6 }}>
+                          {off}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {/* 첨부정정([첨부정정]·[첨부추가])은 결정 본문이 있는 원공시(link)를 연다 */}
+                  <a href={dartUrl(f.link || f.r)} target="_blank" rel="noreferrer">
+                    원문 ↗
+                  </a>
                 </div>
-                <a href={dartUrl(f.r)} target="_blank" rel="noreferrer">
-                  원문 ↗
-                </a>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -452,7 +487,7 @@ export default function CompanyDetailPage() {
         <div className="card">
           <div className="section-head">
             <h2>감사인 이력</h2>
-            <span className="pill">회계감사인 API</span>
+            <span className="pill">회계감사인 API · 보완</span>
           </div>
           <div className="table-wrap">
             <table className="hist-table">

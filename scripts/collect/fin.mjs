@@ -7,6 +7,8 @@
 //   받은 응답은 data/raw에 캐시돼서 같은 명령을 다시 실행하면 받은 곳은 새로 호출하지 않아요.
 //   확보율이 90% 이상 95% 미만이면 저장은 하고 설계서 합격 기준(95%) 미달 경고를 한 줄 보여 줘요.
 // 실행 후 확인: 응답 필드 한 줄, '식별 못 한 행' 수, '확인 필요 계정명'(자본금·세전이익 변형 → 있으면 ACCOUNTS에 추가)
+// 자본금 보완: 주요계정 응답에 자본금 행이 없는 레코드(자본총계는 있음, 원화)만 단일회사 전체 재무제표(fnlttSinglAcntAll.json)로
+//   자본금을 다시 찾는다(레코드 1건에 1번 호출, 10/5 데이터 기준 32건 · 24곳). 계정명 앞 번호 머리('(1)자본금' 등)는 normName 이 지운다.
 import path from 'node:path';
 import { arg, hasFlag, missingValue, loadUniverse, writeJsonl, writeExtraMeta, EXTRA_DIR, log } from '../lib/common.mjs';
 import { createDart, amount, reportStats, assertNoIssues, runCollector, DartFatal } from '../lib/dart.mjs';
@@ -18,7 +20,7 @@ const BATCH = 100; // 다중회사 주요계정은 한 번에 100곳까지
 const MIN_COVERAGE = 0.9; // 주요계정을 받은 회사가 대상의 이 비율 미만이면 저장하지 않는다
 const TARGET_COVERAGE = 0.95; // 설계서 합격 기준: 이 비율 미만이면(90% 이상) 저장은 하되 경고
 
-// 계정명 정리: 공백·(손실) 표기 제거 후 매칭
+// 계정명 정리: 공백·앞 번호 머리·(손실) 표기 제거 후 매칭
 const ACCOUNTS = [
   ['assets', /^자산총계$/],
   ['liabilities', /^부채총계$/],
@@ -29,7 +31,9 @@ const ACCOUNTS = [
   ['pretax', /^(법인세차감전순이익|법인세비용차감전순이익|법인세차감전계속사업이익)$/],
   ['net', /^당기순이익$/],
 ];
-const normName = (s) => (s || '').replace(/\s+/g, '').replace(/\((손실|이익)\)/g, '');
+// 앞 번호 머리: '(1)자본금'·'1.자본금'·'1)자본금'·'Ⅰ.자본금'·'I.자본금'·'가.자본금'·'①자본금'·'[1]자본금' (공백을 지운 뒤 본다)
+const NUM_HEAD = /^(?:[(\[（]?(?:\d{1,2}|[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅰⅱⅲⅳⅴⅵⅶⅷⅸⅹ]|[IVX]{1,4}|[가나다라마바사아자차카타파하])[)\]）.．]|[①-⑳])+/;
+export const normName = (s) => (s || '').replace(/\s+/g, '').replace(NUM_HEAD, '').replace(/\((손실|이익)\)/g, '');
 
 // 주요계정 API가 늘 주지만 신호에 쓰지 않는 계정: '매칭 안 된 계정명' 출력에서 뺀다
 const UNUSED =
@@ -121,6 +125,50 @@ async function fetchYear(dart, corps, year, stockToCorp) {
 
 const fmtCounts = (entries) => entries.map(([k, v]) => `${k}(${v})`).join(', ');
 
+/**
+ * 자본금 보완: 다중회사 주요계정 응답에 자본금 행이 없는 레코드(자본총계는 있음, 원화)만 단일회사 전체 재무제표
+ * (fnlttSinglAcntAll.json, 같은 사업연도·사업보고서·같은 연결/별도)에서 자본금을 찾는다. 회사가 계정명을 '(1)자본금'처럼
+ * 번호를 붙여 적으면 주요계정 API 가 자본금으로 묶지 못해 행이 빠진다(Q1: 광명전기 등 16곳). 레코드 1건에 1번 호출.
+ * 찾는 행: 재무상태표(BS) 중 account_id 가 ifrs-full_IssuedCapital(또는 ifrs_IssuedCapital)이거나, 계정명을 normName 으로
+ * 정리하면 '자본금'인 행. 여러 행이면 account_id 가 맞는 행 → 이름이 맞는 첫 행. 보완한 레코드에는 capital_src 를 남긴다.
+ */
+async function supplementCapital(dart, records) {
+  const need = records.filter((r) => r.capital == null && r.equity != null && (r.currency || 'KRW') === 'KRW');
+  if (!need.length) return { need: 0, filled: 0, empty: 0, notFound: [] };
+  log(`  자본금 보완: 주요계정에 자본금이 없는 ${need.length}건(${new Set(need.map((r) => r.corp_code)).size}곳)을 단일회사 전체 재무제표로 찾아요`);
+  let filled = 0;
+  let empty = 0;
+  const notFound = [];
+  for (const rec of need) {
+    const json = await dart.call(
+      'fnlttSinglAcntAll.json',
+      { corp_code: rec.corp_code, bsns_year: String(rec.bsns_year), reprt_code: '11011', fs_div: rec.fs_div },
+      `${rec.corp_code}_${rec.bsns_year}_11011_${rec.fs_div}`,
+    );
+    if (json.status === '013') {
+      empty++;
+      continue;
+    }
+    if (json.status !== '000') continue; // issues 에 남음 → 저장 전 멈춤
+    const bs = (Array.isArray(json.list) ? json.list : []).filter((r) => r && r.sj_div === 'BS');
+    const byId = bs.find((r) => /^ifrs(-full)?_IssuedCapital$/.test(String(r.account_id || '').trim()));
+    const byName = bs.find((r) => normName(r.account_nm) === '자본금');
+    const v = [byId, byName].filter(Boolean).map((r) => amount(r.thstrm_amount)).find((x) => x != null) ?? null;
+    if (v == null) {
+      notFound.push(rec.corp_code);
+      continue;
+    }
+    rec.capital = v;
+    rec.capital_src = 'fnlttSinglAcntAll';
+    filled++;
+  }
+  log(
+    `  자본금 보완 결과: ${filled}/${need.length}건 채움 · 전체 재무제표 없음(013) ${empty}건 · 자본금 행 못 찾음 ${notFound.length}건` +
+      `${notFound.length ? ` (${[...new Set(notFound)].slice(0, 10).join(', ')})` : ''}`,
+  );
+  return { need: need.length, filled, empty, notFound };
+}
+
 async function main() {
   // 값 없이 준 플래그(--year --fallback 2024 등)는 기본값으로 바뀌어 모르는 사이 다른 연도를 받게 되니 먼저 멈춘다
   for (const [flag, ex] of [['--year', '2025'], ['--fallback', '2024']]) {
@@ -148,6 +196,7 @@ async function main() {
     fb = await fetchYear(dart, missing, FALLBACK, stockToCorp);
   }
   const all = [...cur.records, ...(fb ? fb.records : [])];
+  const supp = await supplementCapital(dart, all);
 
   const seen = new Set();
   let dup = 0;
@@ -203,7 +252,15 @@ async function main() {
   writeJsonl(file, all);
   writeExtraMeta(
     'fin',
-    { year: YEAR, fallback: FALLBACK, records: all.length, companies: cov, target: corps.length, ...(low ? { allowLow: true } : {}) },
+    {
+      year: YEAR,
+      fallback: FALLBACK,
+      records: all.length,
+      companies: cov,
+      target: corps.length,
+      capitalSupp: supp.filled,
+      ...(low ? { allowLow: true } : {}),
+    },
     all,
   );
   log(`완료: ${cov}/${corps.length}곳, 레코드 ${all.length}건 → ${file}`);

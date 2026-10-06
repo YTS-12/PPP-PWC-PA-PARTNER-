@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/lib/app-state';
 import { useSummary } from '@/lib/data';
-import { SIZE_LABEL, STATUSES, SVC, auditorTag } from '@/lib/config';
-import { auditorGroupLabel, downloadCsv } from '@/lib/csv';
+import { SIZE_LABEL, STATUSES, STRONG_WARN_STYLE, SVC, auditorTag } from '@/lib/config';
+import { auditorGroupLabel, auditorNameLabel, downloadCsv } from '@/lib/csv';
 import { kstDate } from '@/lib/format';
 import ModeBanner, { useLeaveToLogin } from '@/components/ModeBanner';
 import type { Profile, Status } from '@/lib/types';
@@ -37,7 +37,23 @@ export default function MePage() {
       visible.map((id) => {
         const c = byCorp.get(id);
         const item = app.personal.shortlist[id];
-        return [c?.n || id, c?.s, c?.m, c?.ig, item.status, item.saved_at, c?.au, auditorGroupLabel(c?.ag, c?.ae), c?.ceo, c?.ph, c?.fx, c?.hp, c?.ad, app.personal.memos[id] || ''];
+        // 현재 감사인·감사인 구분은 추천 목록 CSV와 같은 값(이력 추정은 '(추정)', 추정 감사인 삼일은 경고 문구)
+        return [
+          c?.n || id,
+          c?.s,
+          c?.m,
+          c?.ig,
+          item.status,
+          item.saved_at,
+          c ? auditorNameLabel(c) : '',
+          c ? auditorGroupLabel(c.ag, c.ae, c) : '',
+          c?.ceo,
+          c?.ph,
+          c?.fx,
+          c?.hp,
+          c?.ad,
+          app.personal.memos[id] || '',
+        ];
       }),
     );
   };
@@ -103,8 +119,8 @@ export default function MePage() {
                   {visible.map((id) => {
                     const c = byCorp.get(id);
                     const item = app.personal.shortlist[id];
-                    // 목록과 같은 독립성 태그(삼일·타 법인·감사인 미확인, 이력 추정이면 '(추정)')
-                    const at = c ? auditorTag(c.ag, c.ae) : null;
+                    // 목록과 같은 독립성 태그(삼일·타 법인·감사인 미확인, 이력 추정이면 '감사인 미확인 · …(추정)', 추정 삼일은 진한 주황)
+                    const at = c ? auditorTag(c) : null;
                     return (
                       <tr key={id}>
                         <td>
@@ -112,7 +128,7 @@ export default function MePage() {
                             {c?.n || id}
                           </Link>{' '}
                           {at && (
-                            <span className={`tag ${at.cls}`} title={at.title || undefined}>
+                            <span className={`tag ${at.cls}`} title={at.title || undefined} style={at.strong ? STRONG_WARN_STYLE.tag : undefined}>
                               {at.text}
                             </span>
                           )}
