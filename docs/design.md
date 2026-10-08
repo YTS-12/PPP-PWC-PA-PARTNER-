@@ -48,7 +48,7 @@ flowchart TD
   dweb["DART 공시 화면 (dart.fss.or.kr)<br/>정정공시 확인 · 감사인 화면 보완만 · 1초에 1건"]
   col["개발 PC · 추가 수집 8종 · 키 1개(.env)<br/>fin → major → krx → deadline → auditor → auditor-supp → auditor-web → corrections<br/>OpenDART 약 3,600~5,400건 + DART 화면 약 760~960건 (추정)"]
   dev["개발 PC · 로컬 PPP 폴더<br/>npm run data:build → 12개 신호 판정<br/>public/data: summary + detail 100개"]
-  gh["비공개 GitHub 저장소 (개인 계정)<br/>코드 · data/extra · public/data (키·원본 응답 제외)"]
+  gh["GitHub 저장소 (개인 계정 · 10/8 공개 전환)<br/>코드 · data/extra · public/data (키·원본 응답 제외)"]
   vc["Vercel Hobby · Next.js · 함수 리전 서울(icn1)<br/>public/data를 정적 파일로 제공 · keepalive 크론 · 검색 노출 차단(X-Robots-Tag)"]
   sb["Supabase Free · 로그인·저장만<br/>Auth + profiles · user_filters · shortlist · memos (RLS)"]
   br["브라우저 · 게스트 또는 로그인 사용자<br/>필터·정렬·점수 계산은 브라우저에서"]
@@ -719,7 +719,7 @@ Vercel 환경변수는 `NEXT_PUBLIC_` 값을 포함해 모두 바꾼 뒤 다시 
 | 항목 | 값 |
 | --- | --- |
 | 배포 주소 | https://ppp-rose-two.vercel.app |
-| 저장소 | GitHub `YTS-12/PPP-PWC-PA-PARTNER-` (비공개, 개인 계정 YTS-12, 브랜치 `main`) |
+| 저장소 | GitHub `YTS-12/PPP-PWC-PA-PARTNER-` (개인 계정 YTS-12, 브랜치 `main`. 비공개로 만들어 2026-10-08 심사용으로 공개 전환 — 전환 전 전체 이력에 `.env`·키 값이 없음을 확인) |
 | 링크 유지 | 2026-10-30까지. 이후 정리는 아래 '10/30 이후 정리' |
 
 **배포 순서** (10/5 진행)
@@ -786,7 +786,7 @@ UTC 0시는 한국 시간 오전 9시다. Hobby 플랜 크론은 정한 시각�
 1. Supabase: Authentication → Users에서 사용자 전체 삭제(사용자 테이블 행도 cascade로 삭제) 또는 프로젝트 삭제. 화면의 '내 데이터 지우기'는 테이블 4개만 지우고 로그인 이메일(`auth.users`)은 남기므로, 이메일까지 지우려면 이 단계가 필요하다.
 2. Vercel: 프로젝트 삭제(크론도 함께 멈춘다). 배포 주소가 더 열리지 않는지 확인한다.
 3. OpenDART: 키가 개발 PC `.env` 밖으로 나갔을 가능성이 있으면 재발급한다. 개발 PC의 `.env`와 `data/raw/` 캐시를 지울지 정한다.
-4. GitHub 저장소: 보관(Archive)·비공개 유지·삭제 중 하나를 정한다. 저장소에는 공시 스냅샷(`public/data`·`data/extra`)만 있고 사용자 데이터는 없다.
+4. GitHub 저장소: 보관(Archive)·비공개 재전환·삭제 중 하나를 정한다. 저장소에는 공시 스냅샷(`public/data`·`data/extra`)만 있고 사용자 데이터는 없다.
 
 **동시 접속 대비 (300\~400명)**
 

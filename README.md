@@ -4,7 +4,8 @@ DART 공시 신호로 **회계·결산 지원(PA) · 내부회계관리제도 ·
 코스피·코스닥 상장사 OpenDART 공시를 **기존 수집본(2026-10-04 기준) + 추가 수집** 방식으로 씁니다.
 
 - 공시 데이터: `public/data/` 의 JSON. 기존 수집본에 **추가 수집 5종(주요계정·주요사항보고서·거래소공시·연장신고·2026 반기 감사인)을 모두 반영**했습니다(2026-10-05 수집). Q1 검증 뒤 **수집 2종(감사인 보완·정정공시 확인)과 거래소 시장조치 추출**을 더해 10/6에 다시 수집·빌드했고, 재검증 뒤 **감사인 화면 보완(`collect:auditor-web`)과 시장조치 규칙 조정**을 더해 다시 반영합니다(아래 3절). 데이터 기준일과 반영 상태는 대시보드 '데이터 상태'에서 봅니다.
-- 배포 주소: https://ppp-rose-two.vercel.app (2026-10-30까지 유지) · 저장소: `YTS-12/PPP-PWC-PA-PARTNER-` (비공개)
+- 배포 주소: https://ppp-rose-two.vercel.app (2026-10-30까지 유지) · 저장소: https://github.com/YTS-12/PPP-PWC-PA-PARTNER- (공개 · 2026-10-08 심사용으로 전환)
+- 참고용 Claude Artifact: 최종 앱 정적 사본 https://claude.ai/artifact/55AL7TEJ6eTLqMpgWBdmNv · 초기 프로토타입(10/4) https://claude.ai/artifact/DWKSUgYcfobmFRdQ8J3U51
 - 로그인·개인 맞춤 저장: Supabase (이메일·비밀번호, 이메일 인증 끔)
 - 앱 실행 중에는 OpenDART·LLM API를 부르지 않습니다.
 
@@ -180,7 +181,7 @@ Vercel 첫 배포 전에 끝내 URL과 anon 키를 확보해 둡니다.
 1. Supabase → Authentication → Users 에서 사용자를 모두 삭제하거나(저장 내용도 함께 삭제됨) 프로젝트를 삭제합니다. 화면의 '내 데이터 지우기'는 로그인 이메일까지 지우지 않습니다.
 2. Vercel 프로젝트를 삭제합니다(크론도 멈춤).
 3. OpenDART 키가 개발 PC `.env` 밖으로 나갔을 가능성이 있으면 재발급합니다.
-4. GitHub 저장소를 보관(Archive)할지, 비공개로 둘지, 지울지 정합니다.
+4. GitHub 저장소를 보관(Archive)할지, 다시 비공개로 돌릴지, 지울지 정합니다. (2026-10-08 심사용으로 공개 전환)
 
 ## 폴더 구조
 
