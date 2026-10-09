@@ -264,6 +264,12 @@ tbody tr.pinned { background: #fff3ea; }
 .status-select { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 8px; font-size: 12px; background: #fff; cursor: pointer; transition: border-color var(--t) var(--ease); }
 .status-select:hover { border-color: var(--brand-line); }
 .more { display: flex; justify-content: center; padding-top: 14px; }
+/* 넓은 표의 가로 스크롤바를 화면 아래에 고정 (components/ScrollTable.tsx). 표 자체의 스크롤바는 숨겨 둘이 겹치지 않게 한다 */
+.table-wrap.has-proxy { scrollbar-width: none; }
+.table-wrap.has-proxy::-webkit-scrollbar { display: none; }
+.hscroll { position: sticky; bottom: 0; z-index: 3; overflow-x: auto; overflow-y: hidden; height: 18px; background: rgb(255 255 255 / .94); border-top: 1px solid var(--line2); }
+.hscroll[hidden] { display: none; }
+.hscroll > div { height: 1px; }
 /* 추천 목록 표: 열 최소 폭을 정해 두고 넘치면 가로 스크롤. 기업 열은 스크롤해도 왼쪽에 고정 */
 .co-table { min-width: 900px; }
 .co-table th, .co-table td { padding-left: 10px; padding-right: 10px; }
@@ -404,7 +410,32 @@ tbody tr.pinned { background: #fff3ea; }
   .filter-row input[type=search] { flex-basis: 100%; }
   .filter-row select { flex: 1 1 calc(50% - 4px); min-width: 0; }
   .filter-row .switch { flex: 1 1 100%; }
-  .co-table .col-co { min-width: 170px; }
+  /* 추천 목록: 표 대신 카드 (행 하나 = 카드 한 장). 열 이름은 td 의 data-label 로 보여 준다 */
+  .co-table, .co-table tbody { display: block; min-width: 0; }
+  .co-table thead { display: none; }
+  .co-table tbody tr { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); gap: 8px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; margin-bottom: 10px; background: #fff; box-shadow: var(--sh-sm); }
+  .co-table tbody tr:hover { background: #fff; }
+  .co-table tbody tr.pinned { background: #fff8f2; border-color: var(--brand-line); }
+  .co-table tbody tr:hover > td:first-child, .co-table tbody tr.pinned > td:first-child { box-shadow: none; }
+  .co-table td { display: block; padding: 0; border: 0; min-width: 0; width: auto; white-space: normal !important; text-align: left; }
+  .co-table .col-co, .co-table .col-fin, .co-table .col-score, .co-table .col-ev, .co-table .col-svc, .co-table .col-contact, .co-table .col-pri, .co-table .col-act { min-width: 0; width: auto; }
+  .co-table .tag { white-space: normal; }
+  .co-table td[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 700; color: var(--muted); letter-spacing: .02em; margin-bottom: 3px; }
+  .co-table .col-co { grid-column: 1 / -1; order: 0; position: static; background: transparent !important; box-shadow: none !important; padding-bottom: 8px; border-bottom: 1px solid var(--line2); }
+  .co-table .col-score { order: 1; }
+  .co-table .col-pri { order: 2; }
+  .co-table .col-fin { order: 3; }
+  .co-table .col-ev { order: 4; grid-column: 1 / -1; max-width: none; }
+  .co-table .col-svc { order: 5; grid-column: 1 / -1; }
+  .co-table .col-contact { order: 6; grid-column: 1 / -1; }
+  .co-table .col-act { order: 7; grid-column: 1 / -1; padding-top: 4px; }
+  .co-table .col-act .row-actions { gap: 8px; }
+  .co-table .col-act .small-btn { flex: 1 1 0; text-align: center; padding: 9px 10px; font-size: 12px; }
+  .co-table .score { font-size: 18px; }
+  .co-table .fin-rv, .co-table .fin-op { display: block; }
+  .co-table .fin-op { margin-top: 2px; }
+  .co-table td.empty { grid-column: 1 / -1; padding: 20px 0; }
+  .hscroll { display: none; }
   .hbar-row { grid-template-columns: 110px 1fr 32px; }
   .login-points { display: none; }
   .contact-grid { grid-template-columns: 1fr; }

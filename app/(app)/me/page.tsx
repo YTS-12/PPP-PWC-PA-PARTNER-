@@ -7,6 +7,7 @@ import { SIZE_LABEL, STATUSES, STRONG_WARN_STYLE, SVC, auditorTag } from '@/lib/
 import { auditorGroupLabel, auditorNameLabel, downloadCsv } from '@/lib/csv';
 import { kstDate } from '@/lib/format';
 import ModeBanner, { useLeaveToLogin } from '@/components/ModeBanner';
+import ScrollTable from '@/components/ScrollTable';
 import type { Profile, Status } from '@/lib/types';
 
 type Tab = 'short' | 'settings';
@@ -103,7 +104,7 @@ export default function MePage() {
               <Link href="/companies">추천 목록 보기</Link>
             </div>
           ) : (
-            <div className="table-wrap">
+            <ScrollTable>
               <table>
                 <thead>
                   <tr>
@@ -162,7 +163,7 @@ export default function MePage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </ScrollTable>
           )}
         </div>
       )}

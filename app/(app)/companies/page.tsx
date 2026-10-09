@@ -8,6 +8,7 @@ import { CONFIG, INDUSTRY_GROUPS, SERVICES, SIGNALS, SIG, SIZE_LABEL, STRONG_WAR
 import { siteUrl, won } from '@/lib/format';
 import { auditorGroupLabel, auditorNameLabel, downloadCsv } from '@/lib/csv';
 import ModeBanner from '@/components/ModeBanner';
+import ScrollTable from '@/components/ScrollTable';
 import type { Filters, ServiceId } from '@/lib/types';
 
 const PAGE = 50;
@@ -199,7 +200,7 @@ export default function CompaniesPage() {
           </h2>
           <span className="pill">{f.hideSamil ? `${TEXTS.samilTag} ${hiddenSamil}곳 숨김` : TEXTS.kpiSamilShown}</span>
         </div>
-        <div className="table-wrap">
+        <ScrollTable>
           <table className="co-table">
             <thead>
               <tr>
@@ -245,14 +246,14 @@ export default function CompaniesPage() {
                         {c.s} · {c.m === 'KOSPI' ? '코스피' : '코스닥'} · {c.ig} · 자산 {won(c.a)}
                       </span>
                     </td>
-                    <td className="col-fin">
+                    <td className="col-fin" data-label="매출·영업이익">
                       <span className="fin-rv">{won(c.rv)}</span>
                       <span className={`fin-op ${c.op != null && c.op < 0 ? 'neg' : ''}`}>{won(c.op)}</span>
                     </td>
-                    <td className="col-score">
+                    <td className="col-score" data-label="점수">
                       <span className="score">{c.score}</span>
                     </td>
-                    <td className="col-ev ev-cell">
+                    <td className="col-ev ev-cell" data-label="주요 근거">
                       {top ? (
                         <>
                           <span className="tag">{SIG[top[0]].label}</span>
@@ -264,7 +265,7 @@ export default function CompaniesPage() {
                         <span className="subtle">선택한 신호 없음</span>
                       )}
                     </td>
-                    <td className="col-svc">
+                    <td className="col-svc" data-label="추천 용역">
                       <div className="tags">
                         {c.services.map((s) => (
                           <span className="tag" key={s}>
@@ -273,7 +274,7 @@ export default function CompaniesPage() {
                         ))}
                       </div>
                     </td>
-                    <td className="col-contact" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                    <td className="col-contact" data-label="대표 연락처" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                       {c.ph || <span className="subtle">공시에 없음</span>}
                       {c.hp && (
                         <span className="ticker">
@@ -283,7 +284,7 @@ export default function CompaniesPage() {
                         </span>
                       )}
                     </td>
-                    <td className="col-pri">{c.priority && <span className={`tag ${c.priority === '높음' ? 'green' : c.priority === '보통' ? '' : 'amber'}`}>{c.priority}</span>}</td>
+                    <td className="col-pri" data-label="우선순위">{c.priority && <span className={`tag ${c.priority === '높음' ? 'green' : c.priority === '보통' ? '' : 'amber'}`}>{c.priority}</span>}</td>
                     <td className="col-act">
                       <div className="row-actions">
                         <Link href={`/companies/${c.c}`} className="small-btn" style={{ textDecoration: 'none', color: 'var(--ink)' }}>
@@ -306,7 +307,7 @@ export default function CompaniesPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </ScrollTable>
         {rows.length > limit && (
           <div className="more">
             <button className="secondary" onClick={() => setLimit(limit + PAGE)}>
@@ -315,7 +316,7 @@ export default function CompaniesPage() {
           </div>
         )}
         <p className="hint">
-          우선순위: 점수 3 이상 '높음', 2 '보통', 1 '낮음'. 점수는 고른 신호 수가 만점이에요. 매출·영업이익은 2025 사업보고서 기준(원화 재무만). 행을 누르면 강조가 고정되고, 다시 누르면 풀려요. {CONFIG.disclaimer}
+          우선순위: 점수 3 이상 '높음', 2 '보통', 1 '낮음'. 점수는 고른 신호 수가 만점이에요. 매출·영업이익은 2025 사업보고서 기준(원화 재무만). 행을 누르면 강조가 고정되고, 다시 누르면 풀려요. 표가 넓으면 화면 아래 고정된 스크롤바나 Shift+휠로 좌우로 옮겨 보세요. {CONFIG.disclaimer}
         </p>
       </div>
     </section>
