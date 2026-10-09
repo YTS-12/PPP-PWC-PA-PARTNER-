@@ -625,8 +625,9 @@ RECENT    최근 신호 공시(대시보드 8건·3개월 수)는 신호 근거�
 ```text
 PPP/
 ├─ CLAUDE.md                          # Claude Code 공통 규칙 (아래)
-├─ README.md                          # 실행·추가 수집·배포 안내
+├─ README.md                          # 프로젝트 소개 (기획안 기준, 10/10 개편)
 ├─ docs/design.md                     # 이 설계서 (Markdown으로 내보낸 것)
+├─ docs/operations.md                 # 실행·추가 수집·배포 안내 (옛 README 내용)
 ├─ .env.example                       # 환경변수 견본 → 복사해 .env (커밋 안 함)
 ├─ app/
 │  ├─ page.tsx                        # ① 로그인
